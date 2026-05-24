@@ -1,0 +1,237 @@
+.app-root {
+    -fx-font-family: "SF Pro Display", "Segoe UI", "Helvetica Neue", sans-serif;
+}
+
+.theme-dark {
+    -color-bg: linear-gradient(to bottom right, #0c1524, #111c2f 42%, #0e1627);
+    -color-surface: rgba(22, 31, 49, 0.82);
+    -color-surface-strong: rgba(13, 20, 34, 0.96);
+    -color-border: rgba(255, 255, 255, 0.10);
+    -color-text: #eef4fd;
+    -color-muted: #9cafc8;
+    -color-accent: #62baff;
+    -color-accent-strong: #1778ff;
+    -color-good: #69c8ff;
+    -color-soft: rgba(255,255,255,0.05);
+    -fx-background-color: -color-bg;
+}
+
+.theme-light {
+    -color-bg: linear-gradient(to bottom right, #eef4fb, #f8fbff 50%, #e8eff9);
+    -color-surface: rgba(255, 255, 255, 0.88);
+    -color-surface-strong: rgba(255, 255, 255, 0.96);
+    -color-border: rgba(24, 35, 52, 0.08);
+    -color-text: #142033;
+    -color-muted: #607086;
+    -color-accent: #3fa6ff;
+    -color-accent-strong: #0d6efd;
+    -color-good: #1583db;
+    -color-soft: rgba(18,32,51,0.04);
+    -fx-background-color: -color-bg;
+}
+
+.window-shell {
+    -fx-background-radius: 28px;
+    -fx-border-radius: 28px;
+    -fx-border-color: -color-border;
+    -fx-effect: dropshadow(gaussian, rgba(11,18,28,0.18), 60, 0.18, 0, 24);
+}
+
+.label {
+    -fx-text-fill: -color-text;
+}
+
+.eyebrow-label {
+    -fx-text-fill: -color-accent;
+    -fx-font-size: 11px;
+    -fx-font-weight: 700;
+    -fx-letter-spacing: 1.6px;
+}
+
+.hero-title {
+    -fx-font-size: 30px;
+    -fx-font-weight: 700;
+}
+
+.header-wrap {
+    -fx-padding: 4 2 2 2;
+}
+
+.hero-subtitle,
+.muted-text {
+    -fx-text-fill: -color-muted;
+    -fx-font-size: 13px;
+}
+
+.glass-card {
+    -fx-background-color: -color-surface;
+    -fx-background-radius: 26px;
+    -fx-border-color: -color-border;
+    -fx-border-radius: 26px;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.14), 34, 0.18, 0, 10);
+}
+
+.compact-card {
+    -fx-padding: 18;
+}
+
+.metric-card {
+    -fx-pref-width: 240px;
+}
+
+.metric-label {
+    -fx-text-fill: -color-muted;
+    -fx-font-size: 12px;
+}
+
+.metric-value {
+    -fx-font-size: 24px;
+    -fx-font-weight: 700;
+}
+
+.card-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: 700;
+}
+
+.badge-label {
+    -fx-background-color: rgba(89, 182, 255, 0.18);
+    -fx-border-color: rgba(89, 182, 255, 0.28);
+    -fx-background-radius: 999px;
+    -fx-border-radius: 999px;
+    -fx-padding: 9px 16px;
+    -fx-text-fill: -color-good;
+    -fx-font-weight: 700;
+}
+
+.drop-zone {
+    -fx-border-color: rgba(89, 182, 255, 0.26);
+    -fx-border-style: segments(8, 8);
+    -fx-border-radius: 26px;
+    -fx-background-color: linear-gradient(to bottom right, rgba(89, 182, 255, 0.14), rgba(255,255,255,0.02));
+}
+
+.drop-zone-active {
+    -fx-border-color: -color-accent;
+    -fx-background-color: linear-gradient(to bottom right, rgba(89, 182, 255, 0.22), rgba(255,255,255,0.04));
+}
+
+.primary-button {
+    -fx-background-color: linear-gradient(to bottom, -color-accent, -color-accent-strong);
+    -fx-background-radius: 999px;
+    -fx-text-fill: white;
+    -fx-font-weight: 700;
+    -fx-padding: 11px 18px;
+    -fx-cursor: hand;
+}
+
+.ghost-button,
+.toggle-button,
+.check-box {
+    -fx-cursor: hand;
+}
+
+.ghost-button {
+    -fx-background-color: -color-soft;
+    -fx-border-color: -color-border;
+    -fx-border-radius: 999px;
+    -fx-background-radius: 999px;
+    -fx-text-fill: -color-text;
+    -fx-padding: 10px 16px;
+}
+
+.mode-checkbox {
+    -fx-text-fill: -color-text;
+}
+
+.list-view,
+.text-area {
+    -fx-background-color: transparent;
+    -fx-control-inner-background: -color-surface-strong;
+    -fx-border-color: -color-border;
+    -fx-border-radius: 20px;
+    -fx-background-radius: 20px;
+    -fx-text-fill: -color-text;
+    -fx-highlight-fill: rgba(89, 182, 255, 0.28);
+}
+
+.list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: -color-text;
+    -fx-padding: 12px 14px;
+}
+
+.list-view .list-cell:selected {
+    -fx-background-color: rgba(89, 182, 255, 0.20);
+    -fx-background-radius: 14px;
+}
+
+.text-area {
+    -fx-padding: 10;
+}
+
+.mono-area {
+    -fx-font-family: "JetBrains Mono", "Cascadia Code", monospace;
+    -fx-font-size: 12px;
+}
+
+.segmented-pill {
+    -fx-background-color: -color-soft;
+    -fx-background-radius: 999px;
+    -fx-padding: 8px;
+}
+
+.segmented-item,
+.segmented-item-active {
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-padding: 10px 14px;
+    -fx-background-radius: 999px;
+}
+
+.segmented-item {
+    -fx-text-fill: -color-muted;
+}
+
+.segmented-item-active {
+    -fx-background-color: -color-surface-strong;
+    -fx-text-fill: -color-text;
+}
+
+.traffic-lights {
+    -fx-padding: 6 10 0 0;
+}
+
+.traffic-dot {
+    -fx-min-width: 12px;
+    -fx-min-height: 12px;
+    -fx-max-width: 12px;
+    -fx-max-height: 12px;
+    -fx-background-radius: 999px;
+}
+
+.traffic-red {
+    -fx-background-color: #ff5f57;
+}
+
+.traffic-yellow {
+    -fx-background-color: #febc2e;
+}
+
+.traffic-green {
+    -fx-background-color: #28c840;
+}
+
+.split-pane {
+    -fx-background-color: transparent;
+}
+
+.split-pane > .split-pane-divider {
+    -fx-background-color: transparent;
+    -fx-padding: 0 6 0 6;
+}
+
+.footer-status {
+    -fx-text-fill: -color-muted;
+    -fx-font-size: 12px;
+}

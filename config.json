@@ -1,0 +1,118 @@
+{
+  "inputDir": "input",
+  "outputDir": "output",
+  "workDir": "work",
+  "parsers": [
+    {
+      "name": "honor_apdutx",
+      "extractorFolder": "../apdutx_apdu_extractor_HONOR",
+      "scriptFile": "script_apdus.java",
+      "stagedScriptFileName": "ApduTxExtractor.java",
+      "stagedInputFileName": "apdu log.txt",
+      "stagedOutputFileName": "apdus_TC4169_Part2.txt",
+      "outputExtension": ".txt",
+      "detectionMode": "all",
+      "patterns": [
+        "APDU_tx"
+      ],
+      "extensions": [
+        ".txt",
+        ".log"
+      ]
+    },
+    {
+      "name": "oppo_txdata",
+      "extractorFolder": "../txdata_apdu_extractor_OPPO",
+      "scriptFile": "script_apdus.java",
+      "stagedScriptFileName": "ApduExtractor_TerminalToCard.java",
+      "stagedInputFileName": "pre-analysis.txt",
+      "stagedOutputFileName": "apdus_TC4223.txt",
+      "outputExtension": ".txt",
+      "detectionMode": "all",
+      "patterns": [
+        "Type = TX",
+        "Type = RX"
+      ],
+      "extensions": [
+        ".txt",
+        ".log"
+      ]
+    },
+    {
+      "name": "oh_bytes",
+      "extractorFolder": "../bytes_apdu_extractor_OH",
+      "scriptFile": "script_apdus_fixed.java",
+      "stagedScriptFileName": "ApduExtractor_TerminalToCard_v3.java",
+      "stagedInputFileName": "sample_oh_input.txt",
+      "stagedOutputFileName": "apdus_out.txt",
+      "outputExtension": ".txt",
+      "detectionMode": "all",
+      "commandArgs": [
+        "{input}",
+        "{output}"
+      ],
+      "patterns": [
+        "ff ff 00 00",
+        "00 01"
+      ],
+      "extensions": [
+        ".txt",
+        ".log"
+      ]
+    },
+    {
+      "name": "usimdrv_unisoc",
+      "extractorFolder": "../usimdrv_apdu_extractor_TMC_UNISOC",
+      "scriptFile": "script.java",
+      "stagedScriptFileName": "ApduExtractor.java",
+      "stagedInputFileName": "md_20251224-092358 issue 2.txt",
+      "stagedOutputFileName": "apdus_issue2.txt",
+      "outputExtension": ".txt",
+      "detectionMode": "all",
+      "patterns": [
+        "tx_data_len[",
+        "[T]USIMDRV"
+      ],
+      "extensions": [
+        ".txt",
+        ".log"
+      ]
+    },
+    {
+      "name": "pcsc_terminal",
+      "extractorFolder": "../pcsc_apdu_extractor_TMC",
+      "scriptFile": "scrtipt_apdus.java",
+      "stagedScriptFileName": "ExtractPcscApdus.java",
+      "stagedInputFileName": "MEP_B_open_channel_time_out.log",
+      "stagedOutputFileName": "apdus_TC4398.txt",
+      "outputExtension": ".txt",
+      "detectionMode": "all",
+      "patterns": [
+        "[PCSC]",
+        "-->"
+      ],
+      "extensions": [
+        ".txt",
+        ".log"
+      ]
+    },
+    {
+      "name": "html_apdu",
+      "extractorFolder": "../html_apdu_extractor_China_Unicom",
+      "scriptFile": "ExtractApdusFromHtml.java",
+      "stagedScriptFileName": "ExtractApdusFromHtml.java",
+      "stagedInputFileName": "TC_eUICC_ES10c_DisableProfile_Case4_MEPA1_01_Nominal_Disable_Profile_by_ISD_P_AID_and_refreshFlag_set_when_Device_supports_UICC_Reset.html",
+      "stagedOutputFileName": "apdus.txt",
+      "outputExtension": ".txt",
+      "detectionMode": "all",
+      "patterns": [
+        "<html",
+        "APDU:"
+      ],
+      "extensions": [
+        ".html",
+        ".htm"
+      ]
+    }
+  ]
+}

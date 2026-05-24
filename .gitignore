@@ -1,0 +1,8 @@
+build/
+dist/
+output/
+work/
+run.log
+*.class
+*.jar
+*.exe
