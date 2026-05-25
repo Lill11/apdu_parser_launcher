@@ -227,7 +227,7 @@ public class ApduParserLauncherUI {
 
         JPanel titleBox = transparent();
         titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
-        titleBox.add(createLabel("QA / eSIM DEBUGGING TOOL", 11, BLUE, Font.BOLD));
+        titleBox.add(createLabel("IM / eSIM DEBUGGING TOOL", 11, BLUE, Font.BOLD));
         titleBox.add(Box.createVerticalStrut(3));
         titleBox.add(createLabel("APDU Parser Launcher", 28, TEXT, Font.BOLD));
         titleBox.add(Box.createVerticalStrut(3));
