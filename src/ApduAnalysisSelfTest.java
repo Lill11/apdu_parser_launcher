@@ -81,6 +81,30 @@ public class ApduAnalysisSelfTest {
             if (!bf31.headline.startsWith("ES10 / EnableProfile") || !bf31.tagLabel.startsWith("BF31")) {
                 throw new IllegalStateException("BF31 command should map to ES10 / EnableProfile");
             }
+            Files.writeString(original, "TX: 81 E2 91 00 03 BF 23 00", StandardCharsets.UTF_8);
+            Files.writeString(raw, "81E2910003BF2300", StandardCharsets.UTF_8);
+            ApduOutputAnalyzer.AnalysisItem bf23 = ApduOutputAnalyzer.analyzeEntries(original, raw).get(0);
+            if (!bf23.headline.startsWith("ES10 / InitialiseSecureChannel") || !bf23.tagLabel.equals("BF23 (InitialiseSecureChannel)")) {
+                throw new IllegalStateException("BF23 should map to InitialiseSecureChannel");
+            }
+            Files.writeString(original, "TX: 81 E2 91 00 03 BF 3E 00", StandardCharsets.UTF_8);
+            Files.writeString(raw, "81E2910003BF3E00", StandardCharsets.UTF_8);
+            ApduOutputAnalyzer.AnalysisItem bf3e = ApduOutputAnalyzer.analyzeEntries(original, raw).get(0);
+            if (!bf3e.headline.startsWith("ES10 / GetEID") || !bf3e.tagLabel.equals("BF3E (GetEID)")) {
+                throw new IllegalStateException("BF3E should map to GetEID");
+            }
+            Files.writeString(original, "TX: 81 E2 91 00 03 BF 25 00", StandardCharsets.UTF_8);
+            Files.writeString(raw, "81E2910003BF2500", StandardCharsets.UTF_8);
+            ApduOutputAnalyzer.AnalysisItem bf25 = ApduOutputAnalyzer.analyzeEntries(original, raw).get(0);
+            if (!bf25.headline.startsWith("ES10 / StoreMetadata") || !bf25.tagLabel.equals("BF25 (StoreMetadata)")) {
+                throw new IllegalStateException("BF25 should map to StoreMetadata");
+            }
+            Files.writeString(original, "TX: 81 E2 91 00 05 AA BB BF 31 00", StandardCharsets.UTF_8);
+            Files.writeString(raw, "81E2910005AABBBF3100", StandardCharsets.UTF_8);
+            ApduOutputAnalyzer.AnalysisItem nestedBf31 = ApduOutputAnalyzer.analyzeEntries(original, raw).get(0);
+            if (nestedBf31.headline.startsWith("ES10 /") || nestedBf31.tagLabel.contains("BF31")) {
+                throw new IllegalStateException("Nested BFxx bytes should not be treated as top-level ES10 operations");
+            }
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
@@ -94,6 +118,25 @@ public class ApduAnalysisSelfTest {
         ApduOutputAnalyzer.AnalysisResult configureLsi = ApduOutputAnalyzer.analyzeApdu("807C04009001");
         if (!"Manage LSI".equals(configureLsi.commandName)) {
             throw new IllegalStateException("807C0400... should map to Configure LSI");
+        }
+        Path resetOriginal = Path.of("C:\\Users\\junli\\Documents\\Codex\\apdu_parser_launcher").resolve("analysis-reset-lse.log");
+        Path resetRaw = Path.of("C:\\Users\\junli\\Documents\\Codex\\apdu_parser_launcher").resolve("analysis-reset-lse-raw.txt");
+        try {
+            Files.writeString(resetOriginal, "TX: 80 7C 01 02 19", StandardCharsets.UTF_8);
+            Files.writeString(resetRaw, "807C010219", StandardCharsets.UTF_8);
+            String resetLseRendered = ApduOutputAnalyzer.renderEnhancedOutput(
+                    ApduOutputAnalyzer.analyzeEntries(resetOriginal, resetRaw),
+                    ApduOutputAnalyzer.FilterMode.ALL
+            );
+            assertContains(resetLseRendered, "Reset LSE", "807C010219 should render as Reset LSE");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            try {
+                Files.deleteIfExists(resetOriginal);
+                Files.deleteIfExists(resetRaw);
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -109,8 +152,11 @@ public class ApduAnalysisSelfTest {
                         "TX: 80 12 00 00 0B",
                         "RX: 61 00",
                         "TX: 80 14 00 00 0C",
+                        "TX: 81 E2 91 00 03 BF 25 00",
+                        "TX: 81 E2 91 00 03 BF 23 00",
                         "TX: 81 E2 91 00 03 BF 34 00",
                         "#RESET EUICC_MEMORY_RESET",
+                        "TX: 80 7C 01 02 19",
                         "TX: 80 7C 04 00 90 01",
                         "TX: 80 7C 04 00 90 02"),
                 StandardCharsets.UTF_8
@@ -123,7 +169,10 @@ public class ApduAnalysisSelfTest {
                         "80CAFF2100",
                         "801200000B",
                         "801400000C",
+                        "81E2910003BF2500",
+                        "81E2910003BF2300",
                         "81E2910003BF3400",
+                        "807C010219",
                         "807C04009001",
                         "807C04009002"),
                 StandardCharsets.UTF_8
@@ -142,21 +191,28 @@ public class ApduAnalysisSelfTest {
         assertNotContains(all, "Important ES10 ASN.1 operation", "Enhanced output should avoid explanatory ES10 prose");
         assertNotContains(all, "LSI configuration command", "Enhanced output should avoid explanatory LSI prose");
         assertContains(all, "[0002] ES10 / DisableProfile", "BF32 should render as indexed ES10 operation");
-        assertContains(all, "[0006] ES10 / eUICCMemoryReset", "BF34 should render as indexed ES10 operation");
+        assertContains(all, "[0006] ES10 / StoreMetadata", "BF25 should render with its ES10 semantic name");
+        assertContains(all, "[0007] ES10 / InitialiseSecureChannel", "BF23 should render with its ES10 semantic name");
+        assertContains(all, "[0008] ES10 / eUICCMemoryReset", "BF34 should render as indexed ES10 operation");
         assertContains(all, "Response: 6F00", "Explicit RX should be attached to command");
         assertContains(all, "Severity: ERROR  SW=6F00", "Explicit RX should produce error severity");
+        assertContains(all, "Reset LSE", "807C010219 should render as Reset LSE");
         assertContains(all, "Configure LSI", "807C0400... should be detected as Configure LSI");
         assertContains(all, "[0001] #RESET", "Generic reset marker should be preserved with index");
-        assertContains(all, "[0007] #RESET EUICC_MEMORY_RESET", "Memory reset marker should be preserved with index");
-        assertContains(all, "[0008] #RESET LSE 02 (inferred)", "Configure LSI should add inferred LSE reset context");
+        assertContains(all, "[0009] #RESET EUICC_MEMORY_RESET", "Memory reset marker should be preserved with index");
+        assertNotContains(all, "(inferred)", "Enhanced output should not invent reset markers from Configure LSI");
         assertContains(all, "[0003] ERROR / Unhandled command  <ERROR>  SW=6F00", "ALL view should keep indexed error events visible");
         assertContains(fetchTr, "FETCH", "FETCH/TR filter should include FETCH");
         assertContains(fetchTr, "Terminal Response", "FETCH/TR filter should include Terminal Response");
         assertNotContains(fetchTr, "Configure LSI", "FETCH/TR filter should stay focused");
+        assertContains(lsi, "Reset LSE", "LSI filter should include Reset LSE operations");
         assertContains(lsi, "Configure LSI", "LSI filter should include Configure LSI");
-        assertContains(lsi, "#RESET LSE 02 (inferred)", "LSI filter should keep LSE reset context");
+        assertNotContains(lsi, "(inferred)", "LSI filter should not invent reset context");
         assertNotContains(lsi, "Terminal Response", "LSI filter should exclude unrelated commands");
         assertContains(es10, "[0001] ES10 / EnableProfile", "ES10 filter should include indexed EnableProfile");
+        assertContains(es10, "ES10 / StoreMetadata", "ES10 filter should include BF25");
+        assertContains(es10, "ES10 / InitialiseSecureChannel", "ES10 filter should include BF23");
+        assertNotContains(es10, "E3", "E3 should not be treated as an ES10 item in the filtered view");
         assertContains(es10, "Tag: BF34 (eUICCMemoryReset)", "ES10 filter should include important eUICC tags");
         assertNotContains(es10, "Configure LSI", "ES10 filter should stay focused on ES10 operations only");
         assertContains(es10, "#RESET", "ES10 filter should keep reset context for eUICC operations");

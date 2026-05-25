@@ -30,17 +30,53 @@ public final class ApduOutputAnalyzer {
     private static final Pattern LSE_RE = Pattern.compile("LSE\\s*0*([12])", Pattern.CASE_INSENSITIVE);
     private static final Pattern WARM_RE = Pattern.compile("warm\\s+reset|reset\\s+warm|is in warm reset[:=]?\\s*1|is in warm reset[:=]?\\s*0", Pattern.CASE_INSENSITIVE);
     private static final Pattern COLD_RE = Pattern.compile("cold\\s+reset|reset\\s+cold", Pattern.CASE_INSENSITIVE);
-
     private static final String TAG_BF22 = "BF22";
+    private static final String TAG_BF23 = "BF23";
+    private static final String TAG_BF24 = "BF24";
+    private static final String TAG_BF25 = "BF25";
+    private static final String TAG_BF26 = "BF26";
+    private static final String TAG_BF27 = "BF27";
+    private static final String TAG_BF28 = "BF28";
+    private static final String TAG_BF29 = "BF29";
+    private static final String TAG_BF2A = "BF2A";
+    private static final String TAG_BF2B = "BF2B";
+    private static final String TAG_BF2D = "BF2D";
+    private static final String TAG_BF2E = "BF2E";
+    private static final String TAG_BF30 = "BF30";
     private static final String TAG_BF31 = "BF31";
     private static final String TAG_BF32 = "BF32";
+    private static final String TAG_BF33 = "BF33";
     private static final String TAG_BF34 = "BF34";
-
-    private static final Map<String, String> ES10_TAG_NAMES = Map.of(
-            TAG_BF22, "GetEuiccInfo2Request",
-            TAG_BF31, "EnableProfile",
-            TAG_BF32, "DisableProfile",
-            TAG_BF34, "eUICCMemoryReset"
+    private static final String TAG_BF38 = "BF38";
+    private static final String TAG_BF3C = "BF3C";
+    private static final String TAG_BF3E = "BF3E";
+    private static final String TAG_BF3F = "BF3F";
+    private static final String TAG_BF43 = "BF43";
+    private static final Map<String, String> ES10_TAG_NAMES = Map.ofEntries(
+            Map.entry("BF20", "GetEuiccInfo1 / EUICCInfo1"),
+            Map.entry("BF21", "PrepareDownload"),
+            Map.entry(TAG_BF22, "GetEuiccInfo2Request"),
+            Map.entry(TAG_BF23, "InitialiseSecureChannel"),
+            Map.entry(TAG_BF24, "ConfigureISDP"),
+            Map.entry(TAG_BF25, "StoreMetadata"),
+            Map.entry(TAG_BF26, "ReplaceSessionKeyResponse"),
+            Map.entry(TAG_BF27, "ProfileInstallationReceipt"),
+            Map.entry(TAG_BF28, "ListNotification / ProfileInstallationResult"),
+            Map.entry(TAG_BF29, "SetNickname"),
+            Map.entry(TAG_BF2A, "UpdateMetadata"),
+            Map.entry(TAG_BF2B, "RetrieveNotificationsList"),
+            Map.entry(TAG_BF2D, "GetProfiles"),
+            Map.entry(TAG_BF2E, "GetEuiccChallenge"),
+            Map.entry(TAG_BF30, "RemoveNotificationFromList"),
+            Map.entry(TAG_BF31, "EnableProfile"),
+            Map.entry(TAG_BF32, "DisableProfile"),
+            Map.entry(TAG_BF33, "DeleteProfile"),
+            Map.entry(TAG_BF34, "eUICCMemoryReset"),
+            Map.entry(TAG_BF38, "AuthenticateServer"),
+            Map.entry(TAG_BF3C, "GetConfiguredAddresses"),
+            Map.entry(TAG_BF3E, "GetEID"),
+            Map.entry(TAG_BF3F, "SetDefaultSmdpAddress"),
+            Map.entry(TAG_BF43, "GetRAT")
     );
 
     private ApduOutputAnalyzer() {
@@ -97,11 +133,6 @@ public final class ApduOutputAnalyzer {
 
             if (exchange != null && exchange.resetMarker != null) {
                 items.add(AnalysisItem.reset(apduIndex, exchange.resetMarker, exchange.resetLine));
-            } else {
-                String inferredReset = inferResetMarker(normalized);
-                if (!inferredReset.isBlank()) {
-                    items.add(AnalysisItem.reset(apduIndex, inferredReset, exchange == null ? -1 : exchange.sourceLine));
-                }
             }
 
             items.add(analyzeExchange(apduIndex, normalized, exchange));
@@ -224,6 +255,8 @@ public final class ApduOutputAnalyzer {
         String tag = detectEs10Tag(apdu);
         String commandName = detectBasicCommand(apdu);
         boolean fetchTr = "FETCH".equals(commandName) || "Terminal Response".equals(commandName);
+        boolean resetLse = apdu.startsWith("807C0102") || apdu.startsWith("817C0102")
+                || apdu.startsWith("807C0101") || apdu.startsWith("817C0101");
         boolean configureLsi = apdu.startsWith("807C0400") || apdu.startsWith("817C0400");
         boolean manageLsi = configureLsi || apdu.startsWith("807C") || apdu.startsWith("817C");
 
@@ -233,9 +266,11 @@ public final class ApduOutputAnalyzer {
 
         if (!tag.isBlank()) {
             es10 = true;
-            String semantic = ES10_TAG_NAMES.getOrDefault(tag, "ES10 operation");
+            String semantic = ES10_TAG_NAMES.get(tag);
             headline = "ES10 / " + semantic;
             tag = tag + " (" + semantic + ")";
+        } else if (resetLse) {
+            headline = "Reset LSE";
         } else if (configureLsi) {
             headline = "Configure LSI";
         } else if (manageLsi) {
@@ -265,12 +300,44 @@ public final class ApduOutputAnalyzer {
     }
 
     private static String detectEs10Tag(String apdu) {
+        String data = extractCommandData(apdu);
+        if (data.isBlank()) {
+            return "";
+        }
+
         for (String tag : ES10_TAG_NAMES.keySet()) {
-            if (apdu.contains(tag)) {
+            if (data.startsWith(tag)) {
                 return tag;
             }
         }
         return "";
+    }
+
+    private static String extractCommandData(String apdu) {
+        if (apdu == null || apdu.length() < 10 || (apdu.length() % 2) != 0) {
+            return "";
+        }
+
+        try {
+            int totalBytes = apdu.length() / 2;
+            int lc = Integer.parseInt(apdu.substring(8, 10), 16);
+            if (lc <= 0) {
+                return "";
+            }
+
+            int dataBytesAvailable = totalBytes - 5;
+            if (dataBytesAvailable < lc) {
+                return "";
+            }
+
+            int dataEnd = 10 + (lc * 2);
+            if (dataEnd > apdu.length()) {
+                return "";
+            }
+            return apdu.substring(10, dataEnd);
+        } catch (NumberFormatException ex) {
+            return "";
+        }
     }
 
     private static String buildHeadline(CommandDescriptor descriptor, String severity, String statusWord) {
@@ -342,19 +409,6 @@ public final class ApduOutputAnalyzer {
         }
         if (sw.matches("6C[0-9A-F]{2}")) {
             return "Wrong length, retry with Le=" + sw.substring(2);
-        }
-        return "";
-    }
-
-    private static String inferResetMarker(String apdu) {
-        if (apdu.startsWith("807C04009001") || apdu.startsWith("817C04009001")) {
-            return "#RESET LSE 01 (inferred)";
-        }
-        if (apdu.startsWith("807C04009002") || apdu.startsWith("817C04009002")) {
-            return "#RESET LSE 02 (inferred)";
-        }
-        if (apdu.startsWith("807C0400") || apdu.startsWith("817C0400")) {
-            return "#RESET LSE (inferred)";
         }
         return "";
     }
