@@ -15,6 +15,11 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.RenderingHints;
 import java.awt.datatransfer.DataFlavor;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetAdapter;
+import java.awt.dnd.DropTargetDragEvent;
+import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
@@ -35,6 +40,7 @@ import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -300,7 +306,7 @@ public class ApduParserLauncherUI {
                 importFiles();
             }
         });
-        inner.setTransferHandler(new FileDropHandler());
+        installFileDropSupport(inner);
         card.add(inner);
         card.setMinimumSize(new Dimension(320, 196));
         card.setPreferredSize(new Dimension(360, 196));
@@ -1254,6 +1260,75 @@ public class ApduParserLauncherUI {
         return value == null || value.isBlank() ? fallback : value;
     }
 
+    private void installFileDropSupport(JComponent component) {
+        if (component == null) {
+            return;
+        }
+        component.setTransferHandler(new FileDropHandler());
+        installNativeFileDropSupport(component);
+    }
+
+    private void installNativeFileDropSupport(JComponent component) {
+        if (component == null) {
+            return;
+        }
+        component.setDropTarget(new DropTarget(component, DnDConstants.ACTION_COPY, new DropTargetAdapter() {
+            @Override
+            public void dragEnter(DropTargetDragEvent event) {
+                if (event.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                    dropTargetPanel.setBackground(new Color(226, 235, 246));
+                    statusLabel.setText("Drop log files to import");
+                    event.acceptDrag(DnDConstants.ACTION_COPY);
+                } else {
+                    event.rejectDrag();
+                }
+            }
+
+            @Override
+            public void dragExit(java.awt.dnd.DropTargetEvent event) {
+                dropTargetPanel.setBackground(BLUE_SOFT);
+                statusLabel.setText("Ready");
+            }
+
+            @Override
+            public void drop(DropTargetDropEvent event) {
+                handleNativeFileDrop(event);
+            }
+        }, true));
+    }
+
+    private void handleNativeFileDrop(DropTargetDropEvent event) {
+        try {
+            event.acceptDrop(DnDConstants.ACTION_COPY);
+            if (!event.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                event.dropComplete(false);
+                statusLabel.setText("Only file drops are supported");
+                return;
+            }
+            @SuppressWarnings("unchecked")
+            List<java.io.File> droppedFiles = (List<java.io.File>) event.getTransferable()
+                    .getTransferData(DataFlavor.javaFileListFlavor);
+            List<Path> paths = new ArrayList<>();
+            for (java.io.File file : droppedFiles) {
+                paths.add(file.toPath());
+            }
+            if (paths.isEmpty()) {
+                statusLabel.setText("No files were dropped");
+                dropTargetPanel.setBackground(BLUE_SOFT);
+                event.dropComplete(false);
+                return;
+            }
+            importFiles(paths);
+            dropTargetPanel.setBackground(BLUE_SOFT);
+            event.dropComplete(true);
+        } catch (Exception ex) {
+            dropTargetPanel.setBackground(BLUE_SOFT);
+            appendConsole("Native drag-and-drop import failed: " + ex.getMessage());
+            showError("Drag-and-drop failed", ex);
+            event.dropComplete(false);
+        }
+    }
+
     private boolean isSupportedImportFile(Path file) {
         if (file == null) {
             return false;
@@ -1377,6 +1452,10 @@ public class ApduParserLauncherUI {
                 List<Path> paths = new ArrayList<>();
                 for (java.io.File file : droppedFiles) {
                     paths.add(file.toPath());
+                }
+                if (paths.isEmpty()) {
+                    statusLabel.setText("No files were dropped");
+                    return false;
                 }
                 importFiles(paths);
                 return true;

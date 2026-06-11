@@ -64,6 +64,7 @@ public class ApduParserLauncherFX extends Application {
         root.getStyleClass().addAll("app-root", "theme-dark");
         root.setPadding(new Insets(20));
         root.getStyleClass().add("window-shell");
+        installGlobalDropSupport(root);
 
         root.setTop(buildHeader(stage));
         root.setCenter(buildCenter(stage));
@@ -88,17 +89,19 @@ public class ApduParserLauncherFX extends Application {
     }
 
     private VBox buildHeader(Stage stage) {
-        VBox header = new VBox(14);
+        VBox header = new VBox(16);
         header.getStyleClass().add("header-wrap");
 
-        HBox topRow = new HBox(14);
-        topRow.setAlignment(Pos.CENTER_LEFT);
+        HBox introRow = new HBox(18);
+        introRow.setAlignment(Pos.CENTER_LEFT);
 
         HBox traffic = new HBox(8);
         traffic.getStyleClass().add("traffic-lights");
         traffic.getChildren().addAll(trafficDot("traffic-red"), trafficDot("traffic-yellow"), trafficDot("traffic-green"));
 
         VBox titleBox = new VBox(4);
+        HBox.setHgrow(titleBox, Priority.ALWAYS);
+        titleBox.setMaxWidth(Double.MAX_VALUE);
         Label eyebrow = new Label("QA / eSIM APDU WORKBENCH");
         eyebrow.getStyleClass().add("eyebrow-label");
         Label title = new Label("APDU Parser Launcher");
@@ -107,17 +110,18 @@ public class ApduParserLauncherFX extends Application {
                 "Import customer logs, detect parser types, preview APDUs, inspect console traces, and export clean output."
         );
         subtitle.getStyleClass().add("hero-subtitle");
+        subtitle.setWrapText(true);
+        subtitle.setMaxWidth(Double.MAX_VALUE);
         titleBox.getChildren().addAll(eyebrow, title, subtitle);
+        introRow.getChildren().addAll(traffic, titleBox);
 
-        RegionSpacer spacer = new RegionSpacer();
-
-        themeToggle = new ToggleButton("Light Mode");
+        themeToggle = new ToggleButton("Dark Mode");
         themeToggle.getStyleClass().add("ghost-button");
         themeToggle.setOnAction(event -> {
             boolean light = themeToggle.isSelected();
             root.getStyleClass().removeAll("theme-dark", "theme-light");
             root.getStyleClass().add(light ? "theme-light" : "theme-dark");
-            themeToggle.setText(light ? "Dark Mode" : "Light Mode");
+            themeToggle.setText(light ? "Light Mode" : "Dark Mode");
         });
 
         dryRunCheckbox = new CheckBox("Detect Only");
@@ -126,6 +130,12 @@ public class ApduParserLauncherFX extends Application {
 
         Button addFilesButton = createGhostButton("Import Logs");
         addFilesButton.setOnAction(event -> importFiles(stage));
+
+        Button refreshButton = createGhostButton("Refresh");
+        refreshButton.setOnAction(event -> {
+            appendConsole("Manual refresh requested.");
+            refreshAll();
+        });
 
         Button addParserButton = createGhostButton("Register Log Type");
         addParserButton.setOnAction(event -> showAddParserDialog(stage));
@@ -139,31 +149,42 @@ public class ApduParserLauncherFX extends Application {
         Button runButton = createPrimaryButton("Parse Logs");
         runButton.setOnAction(event -> runEngine(runButton));
 
-        FlowPane actionFlow = new FlowPane();
-        actionFlow.setHgap(10);
-        actionFlow.setVgap(10);
-        actionFlow.setAlignment(Pos.CENTER_RIGHT);
-        actionFlow.getChildren().addAll(
+        HBox quickActions = new HBox(10);
+        quickActions.setAlignment(Pos.CENTER_RIGHT);
+        quickActions.getStyleClass().add("toolbar-inline");
+        quickActions.getChildren().addAll(
                 themeToggle,
                 dryRunCheckbox,
-                addFilesButton,
-                addParserButton,
-                openInputButton,
-                openOutputButton,
                 runButton
         );
 
-        topRow.getChildren().addAll(traffic, titleBox, spacer, actionFlow);
+        introRow.getChildren().addAll(traffic, titleBox, new RegionSpacer(), quickActions);
 
-        HBox metricRow = new HBox(12);
-        metricRow.getChildren().addAll(
+        FlowPane actionFlow = new FlowPane(10, 10);
+        actionFlow.setHgap(10);
+        actionFlow.setVgap(10);
+        actionFlow.setAlignment(Pos.CENTER_LEFT);
+        actionFlow.getStyleClass().add("toolbar-flow");
+        actionFlow.getChildren().addAll(
+                addFilesButton,
+                refreshButton,
+                addParserButton,
+                openInputButton,
+                openOutputButton
+        );
+
+        FlowPane metricFlow = new FlowPane();
+        metricFlow.setHgap(12);
+        metricFlow.setVgap(12);
+        metricFlow.setPrefWrapLength(1180);
+        metricFlow.getChildren().addAll(
                 metricCard("Input Files", "0"),
                 metricCard("Parsed Outputs", "0"),
                 metricCard("Unmatched", "0"),
                 metricCard("Detected Parser", "Select a file")
         );
 
-        header.getChildren().addAll(topRow, metricRow);
+        header.getChildren().addAll(introRow, actionFlow, metricFlow);
         return header;
     }
 
@@ -199,6 +220,7 @@ public class ApduParserLauncherFX extends Application {
         dropZone.setAlignment(Pos.CENTER);
         dropZone.setSpacing(10);
         dropZone.setPadding(new Insets(26));
+        dropZone.setOnMouseClicked(event -> importFiles(stage));
 
         Label title = new Label("Drop Customer Logs");
         title.getStyleClass().add("card-title");
@@ -406,26 +428,38 @@ public class ApduParserLauncherFX extends Application {
     }
 
     private void installDropSupport(VBox node) {
-        node.setOnDragOver(event -> {
-            if (event.getGestureSource() != node && event.getDragboard().hasFiles()) {
-                event.acceptTransferModes(TransferMode.COPY);
-            }
-            event.consume();
-        });
-
-        node.setOnDragEntered(event -> {
+        node.addEventFilter(DragEvent.DRAG_OVER, event -> {
             if (event.getDragboard().hasFiles()) {
-                node.getStyleClass().add("drop-zone-active");
+                event.acceptTransferModes(TransferMode.COPY);
+                event.consume();
             }
-            event.consume();
         });
 
-        node.setOnDragExited(event -> {
+        node.addEventFilter(DragEvent.DRAG_ENTERED, event -> {
+            if (event.getDragboard().hasFiles() && !node.getStyleClass().contains("drop-zone-active")) {
+                node.getStyleClass().add("drop-zone-active");
+                event.consume();
+            }
+        });
+
+        node.addEventFilter(DragEvent.DRAG_EXITED, event -> {
             node.getStyleClass().remove("drop-zone-active");
-            event.consume();
+            if (event.getDragboard().hasFiles()) {
+                event.consume();
+            }
         });
 
-        node.setOnDragDropped(this::handleDrop);
+        node.addEventFilter(DragEvent.DRAG_DROPPED, this::handleDrop);
+    }
+
+    private void installGlobalDropSupport(BorderPane node) {
+        node.addEventFilter(DragEvent.DRAG_OVER, event -> {
+            if (event.getDragboard().hasFiles()) {
+                event.acceptTransferModes(TransferMode.COPY);
+                event.consume();
+            }
+        });
+        node.addEventFilter(DragEvent.DRAG_DROPPED, this::handleDrop);
     }
 
     private void handleDrop(DragEvent event) {
@@ -437,10 +471,20 @@ public class ApduParserLauncherFX extends Application {
                 files.add(file.toPath());
             }
             try {
-                engine.importFiles(files);
-                appendConsole("Imported " + files.size() + " file(s) via drag and drop.");
+                List<Path> accepted = filterSupportedImportFiles(files);
+                List<Path> rejected = rejectUnsupportedImportFiles(files);
+                if (!accepted.isEmpty()) {
+                    engine.importFiles(accepted);
+                    appendConsole("Imported " + accepted.size() + " file(s) via drag and drop.");
+                    success = true;
+                }
+                if (!rejected.isEmpty()) {
+                    appendConsole("Skipped unsupported file(s): " + joinFileNames(rejected));
+                }
+                if (accepted.isEmpty() && !rejected.isEmpty()) {
+                    statusValue.setText("No supported log files were imported");
+                }
                 refreshAll();
-                success = true;
             } catch (Exception ex) {
                 appendConsole("Import failed: " + ex.getMessage());
                 statusValue.setText("Import failed");
@@ -463,13 +507,62 @@ public class ApduParserLauncherFX extends Application {
             for (File file : files) {
                 paths.add(file.toPath());
             }
-            engine.importFiles(paths);
-            appendConsole("Imported " + paths.size() + " file(s).");
+            List<Path> accepted = filterSupportedImportFiles(paths);
+            List<Path> rejected = rejectUnsupportedImportFiles(paths);
+            if (!accepted.isEmpty()) {
+                engine.importFiles(accepted);
+                appendConsole("Imported " + accepted.size() + " file(s).");
+            }
+            if (!rejected.isEmpty()) {
+                appendConsole("Skipped unsupported file(s): " + joinFileNames(rejected));
+            }
+            if (accepted.isEmpty() && !rejected.isEmpty()) {
+                statusValue.setText("No supported log files were imported");
+            }
             refreshAll();
         } catch (Exception ex) {
             appendConsole("Import failed: " + ex.getMessage());
             statusValue.setText("Import failed");
         }
+    }
+
+    private List<Path> filterSupportedImportFiles(List<Path> files) {
+        List<Path> accepted = new ArrayList<>();
+        for (Path file : files) {
+            if (isSupportedImportFile(file)) {
+                accepted.add(file);
+            }
+        }
+        return accepted;
+    }
+
+    private List<Path> rejectUnsupportedImportFiles(List<Path> files) {
+        List<Path> rejected = new ArrayList<>();
+        for (Path file : files) {
+            if (!isSupportedImportFile(file)) {
+                rejected.add(file);
+            }
+        }
+        return rejected;
+    }
+
+    private boolean isSupportedImportFile(Path file) {
+        if (file == null || file.getFileName() == null) {
+            return false;
+        }
+        String name = file.getFileName().toString().toLowerCase();
+        return name.endsWith(".txt")
+                || name.endsWith(".log")
+                || name.endsWith(".html")
+                || name.endsWith(".htm");
+    }
+
+    private String joinFileNames(List<Path> files) {
+        List<String> names = new ArrayList<>();
+        for (Path file : files) {
+            names.add(file.getFileName() == null ? file.toString() : file.getFileName().toString());
+        }
+        return String.join(", ", names);
     }
 
     private void showAddParserDialog(Stage stage) {
