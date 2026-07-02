@@ -62,7 +62,7 @@ public class ApduParserLauncherFX extends Application {
 
         root = new BorderPane();
         root.getStyleClass().addAll("app-root", "theme-dark");
-        root.setPadding(new Insets(20));
+        root.setPadding(new Insets(14));
         root.getStyleClass().add("window-shell");
         installGlobalDropSupport(root);
 
@@ -70,12 +70,12 @@ public class ApduParserLauncherFX extends Application {
         root.setCenter(buildCenter(stage));
         root.setBottom(buildFooter());
 
-        Scene scene = new Scene(root, 1400, 900);
+        Scene scene = new Scene(root, 1280, 820);
         scene.getStylesheets().add(engine.getLauncherRoot().resolve("src").resolve("apdu-launcher.css").toUri().toString());
 
         stage.setTitle("APDU Parser Launcher");
-        stage.setMinWidth(1180);
-        stage.setMinHeight(760);
+        stage.setMinWidth(1080);
+        stage.setMinHeight(700);
         stage.setScene(scene);
         stage.show();
 
@@ -89,17 +89,17 @@ public class ApduParserLauncherFX extends Application {
     }
 
     private VBox buildHeader(Stage stage) {
-        VBox header = new VBox(16);
+        VBox header = new VBox(12);
         header.getStyleClass().add("header-wrap");
 
-        HBox introRow = new HBox(18);
+        HBox introRow = new HBox(14);
         introRow.setAlignment(Pos.CENTER_LEFT);
 
         HBox traffic = new HBox(8);
         traffic.getStyleClass().add("traffic-lights");
         traffic.getChildren().addAll(trafficDot("traffic-red"), trafficDot("traffic-yellow"), trafficDot("traffic-green"));
 
-        VBox titleBox = new VBox(4);
+        VBox titleBox = new VBox(2);
         HBox.setHgrow(titleBox, Priority.ALWAYS);
         titleBox.setMaxWidth(Double.MAX_VALUE);
         Label eyebrow = new Label("QA / eSIM APDU WORKBENCH");
@@ -113,7 +113,6 @@ public class ApduParserLauncherFX extends Application {
         subtitle.setWrapText(true);
         subtitle.setMaxWidth(Double.MAX_VALUE);
         titleBox.getChildren().addAll(eyebrow, title, subtitle);
-        introRow.getChildren().addAll(traffic, titleBox);
 
         themeToggle = new ToggleButton("Dark Mode");
         themeToggle.getStyleClass().add("ghost-button");
@@ -160,9 +159,9 @@ public class ApduParserLauncherFX extends Application {
 
         introRow.getChildren().addAll(traffic, titleBox, new RegionSpacer(), quickActions);
 
-        FlowPane actionFlow = new FlowPane(10, 10);
-        actionFlow.setHgap(10);
-        actionFlow.setVgap(10);
+        FlowPane actionFlow = new FlowPane(8, 8);
+        actionFlow.setHgap(8);
+        actionFlow.setVgap(8);
         actionFlow.setAlignment(Pos.CENTER_LEFT);
         actionFlow.getStyleClass().add("toolbar-flow");
         actionFlow.getChildren().addAll(
@@ -174,9 +173,9 @@ public class ApduParserLauncherFX extends Application {
         );
 
         FlowPane metricFlow = new FlowPane();
-        metricFlow.setHgap(12);
-        metricFlow.setVgap(12);
-        metricFlow.setPrefWrapLength(1180);
+        metricFlow.setHgap(10);
+        metricFlow.setVgap(10);
+        metricFlow.setPrefWrapLength(1040);
         metricFlow.getChildren().addAll(
                 metricCard("Input Files", "0"),
                 metricCard("Parsed Outputs", "0"),
@@ -191,20 +190,20 @@ public class ApduParserLauncherFX extends Application {
     private SplitPane buildCenter(Stage stage) {
         SplitPane splitPane = new SplitPane();
         splitPane.setOrientation(Orientation.HORIZONTAL);
-        splitPane.setDividerPositions(0.28, 0.72);
+        splitPane.setDividerPositions(0.25, 0.78);
         splitPane.getStyleClass().add("main-split");
 
-        VBox leftRail = new VBox(14);
+        VBox leftRail = new VBox(12);
         leftRail.getChildren().addAll(buildDropZone(stage), buildInputCard());
 
-        VBox rightRail = new VBox(14);
+        VBox rightRail = new VBox(12);
         VBox.setVgrow(rightRail, Priority.ALWAYS);
-        HBox middleRow = new HBox(14);
+        HBox middleRow = new HBox(12);
         VBox.setVgrow(middleRow, Priority.ALWAYS);
         VBox previewWrap = buildPreviewCard();
         VBox.setVgrow(previewWrap, Priority.ALWAYS);
-        VBox sideStack = new VBox(14);
-        sideStack.setPrefWidth(280);
+        VBox sideStack = new VBox(12);
+        sideStack.setPrefWidth(240);
         sideStack.getChildren().addAll(buildModeCard(), buildExportCard());
         middleRow.getChildren().addAll(previewWrap, sideStack);
         HBox.setHgrow(previewWrap, Priority.ALWAYS);
@@ -218,8 +217,8 @@ public class ApduParserLauncherFX extends Application {
         VBox dropZone = card();
         dropZone.getStyleClass().add("drop-zone");
         dropZone.setAlignment(Pos.CENTER);
-        dropZone.setSpacing(10);
-        dropZone.setPadding(new Insets(26));
+        dropZone.setSpacing(8);
+        dropZone.setPadding(new Insets(18));
         dropZone.setOnMouseClicked(event -> importFiles(stage));
 
         Label title = new Label("Drop Customer Logs");
@@ -227,7 +226,7 @@ public class ApduParserLauncherFX extends Application {
         dropHint = new Label("Drag .txt, .log, .html files here or click Import Logs.");
         dropHint.getStyleClass().add("muted-text");
         dropHint.setWrapText(true);
-        dropHint.setMaxWidth(260);
+        dropHint.setMaxWidth(220);
 
         Button addFiles = createPrimaryButton("Choose Files");
         addFiles.setOnAction(event -> importFiles(stage));
@@ -239,7 +238,7 @@ public class ApduParserLauncherFX extends Application {
 
     private VBox buildInputCard() {
         VBox card = card();
-        card.setSpacing(10);
+        card.setSpacing(8);
         Label title = new Label("Imported Logs");
         title.getStyleClass().add("card-title");
 
@@ -256,7 +255,7 @@ public class ApduParserLauncherFX extends Application {
 
     private VBox buildDetectionCard() {
         VBox card = card();
-        card.setSpacing(10);
+        card.setSpacing(8);
 
         HBox row = new HBox(10);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -302,7 +301,7 @@ public class ApduParserLauncherFX extends Application {
     private VBox buildModeCard() {
         VBox card = card();
         card.getStyleClass().add("compact-card");
-        card.setSpacing(12);
+        card.setSpacing(10);
 
         Label title = new Label("Run Mode");
         title.getStyleClass().add("card-title");
@@ -325,7 +324,7 @@ public class ApduParserLauncherFX extends Application {
     private VBox buildExportCard() {
         VBox card = card();
         card.getStyleClass().add("compact-card");
-        card.setSpacing(12);
+        card.setSpacing(10);
 
         Label title = new Label("Export & Delivery");
         title.getStyleClass().add("card-title");
@@ -361,7 +360,7 @@ public class ApduParserLauncherFX extends Application {
         consoleArea.setEditable(false);
         consoleArea.setWrapText(true);
         consoleArea.getStyleClass().add("mono-area");
-        consoleArea.setPrefRowCount(10);
+        consoleArea.setPrefRowCount(8);
 
         card.getChildren().addAll(titleRow, consoleArea);
         return card;

@@ -67,7 +67,7 @@ public class ApduParserLauncherUI {
     private static final Color BLUE_SOFT = new Color(240, 244, 248);
     private static final Color CODE_BG = new Color(18, 22, 28);
     private static final Color CODE_TEXT = new Color(230, 235, 241);
-    private static final int RESPONSIVE_STACK_WIDTH = 1080;
+    private static final int RESPONSIVE_STACK_WIDTH = 980;
 
     public static void main(String[] args) {
         try {
@@ -131,8 +131,8 @@ public class ApduParserLauncherUI {
 
         frame = new JFrame("APDU Parser Launcher");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(1480, 920);
-        frame.setMinimumSize(new Dimension(1020, 720));
+        frame.setSize(1240, 760);
+        frame.setMinimumSize(new Dimension(920, 640));
         frame.getContentPane().setBackground(APP_BG);
         frame.addWindowFocusListener(new WindowAdapter() {
             @Override
@@ -141,9 +141,9 @@ public class ApduParserLauncherUI {
             }
         });
 
-        RoundedPanel shell = new RoundedPanel(SHELL_BG, 24, false);
-        shell.setLayout(new BorderLayout(18, 18));
-        shell.setBorder(new EmptyBorder(18, 18, 18, 18));
+        RoundedPanel shell = new RoundedPanel(SHELL_BG, 16, false);
+        shell.setLayout(new BorderLayout(12, 12));
+        shell.setBorder(new EmptyBorder(8, 8, 8, 8));
 
         importedLogsListPanel = new JPanel();
         importedLogsListPanel.setLayout(new BoxLayout(importedLogsListPanel, BoxLayout.Y_AXIS));
@@ -190,12 +190,12 @@ public class ApduParserLauncherUI {
 
         JPanel outer = new JPanel(new BorderLayout());
         outer.setBackground(APP_BG);
-        outer.setBorder(new EmptyBorder(12, 12, 12, 12));
+        outer.setBorder(new EmptyBorder(4, 4, 4, 4));
 
         JPanel content = new JPanel();
         content.setOpaque(false);
         content.setLayout(new BoxLayout(content, BoxLayout.Y_AXIS));
-        content.setBorder(new EmptyBorder(8, 10, 12, 10));
+        content.setBorder(new EmptyBorder(4, 6, 6, 6));
         content.add(shell);
 
         shell.add(buildTopBar(), BorderLayout.NORTH);
@@ -220,27 +220,27 @@ public class ApduParserLauncherUI {
     }
 
     private JPanel buildTopBar() {
-        JPanel topWrap = transparent(new BorderLayout(14, 14));
+        JPanel topWrap = transparent(new BorderLayout(8, 8));
 
-        RoundedPanel topBar = new RoundedPanel(Color.WHITE, 24, true);
-        ResponsiveHeaderPanel topBarContent = new ResponsiveHeaderPanel(1180);
-        topBar.setBorder(new EmptyBorder(14, 18, 14, 18));
+        RoundedPanel topBar = new RoundedPanel(Color.WHITE, 16, true);
+        ResponsiveHeaderPanel topBarContent = new ResponsiveHeaderPanel(980);
+        topBar.setBorder(new EmptyBorder(8, 10, 8, 10));
 
         JPanel left = transparent();
         left.setLayout(new BoxLayout(left, BoxLayout.X_AXIS));
         left.add(trafficLights());
-        left.add(Box.createHorizontalStrut(14));
+        left.add(Box.createHorizontalStrut(8));
 
         JPanel titleBox = transparent();
         titleBox.setLayout(new BoxLayout(titleBox, BoxLayout.Y_AXIS));
-        titleBox.add(createLabel("IM / eSIM DEBUGGING TOOL", 11, BLUE, Font.BOLD));
-        titleBox.add(Box.createVerticalStrut(3));
-        titleBox.add(createLabel("APDU Parser Launcher", 28, TEXT, Font.BOLD));
-        titleBox.add(Box.createVerticalStrut(3));
-        titleBox.add(createLabel("Import logs, run parsers, inspect raw APDUs, and review analyzer output.", 13, MUTED, Font.PLAIN));
+        titleBox.add(createLabel("IM / eSIM DEBUGGING TOOL", 9, BLUE, Font.BOLD));
+        titleBox.add(Box.createVerticalStrut(1));
+        titleBox.add(createLabel("APDU Parser Launcher", 20, TEXT, Font.BOLD));
+        titleBox.add(Box.createVerticalStrut(1));
+        titleBox.add(createLabel("Import logs, run parsers, inspect raw APDUs, and review analyzer output.", 11, MUTED, Font.PLAIN));
         left.add(titleBox);
 
-        JPanel right = transparent(new FlowLayout(FlowLayout.RIGHT, 10, 4));
+        JPanel right = transparent(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         right.add(importButton);
         right.add(refreshButton);
         right.add(registerButton);
@@ -255,7 +255,7 @@ public class ApduParserLauncherUI {
         topBar.setLayout(new BorderLayout());
         topBar.add(topBarContent, BorderLayout.CENTER);
 
-        JPanel metrics = transparent(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        JPanel metrics = transparent(new FlowLayout(FlowLayout.LEFT, 8, 0));
         metrics.add(metricCard("Imported Logs", filesMetric));
         metrics.add(metricCard("Parsed Outputs", parsedMetric));
         metrics.add(metricCard("Unmatched", unknownMetric));
@@ -269,12 +269,12 @@ public class ApduParserLauncherUI {
     private Component buildCenter() {
         leftColumnPanel.removeAll();
         leftColumnPanel.add(importCard());
-        leftColumnPanel.add(Box.createVerticalStrut(14));
+        leftColumnPanel.add(Box.createVerticalStrut(8));
         leftColumnPanel.add(queueCard());
 
         centerColumnPanel.removeAll();
         centerColumnPanel.add(previewCard());
-        centerColumnPanel.add(Box.createVerticalStrut(14));
+        centerColumnPanel.add(Box.createVerticalStrut(8));
         consoleCardPanel.setVisible(consoleVisible);
         centerColumnPanel.add(consoleCardPanel);
 
@@ -284,21 +284,21 @@ public class ApduParserLauncherUI {
     private RoundedPanel importCard() {
         RoundedPanel card = cardPanel();
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(new EmptyBorder(20, 20, 20, 20));
+        card.setBorder(new EmptyBorder(10, 10, 10, 10));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        card.add(createLabel("Drop Customer Logs", 18, TEXT, Font.BOLD));
+        card.add(createLabel("Drop Customer Logs", 15, TEXT, Font.BOLD));
+        card.add(Box.createVerticalStrut(4));
+        card.add(createWrappedText("Drag .txt, .log, .html, or .htm files here, or click Import Logs. Supported files are copied into the tool inbox automatically.", 11, MUTED));
         card.add(Box.createVerticalStrut(8));
-        card.add(createWrappedText("Drag .txt, .log, .html, or .htm files here, or click Import Logs. Supported files are copied into the tool inbox automatically.", 13, MUTED));
-        card.add(Box.createVerticalStrut(14));
 
-        RoundedPanel inner = new RoundedPanel(BLUE_SOFT, 22, false);
+        RoundedPanel inner = new RoundedPanel(BLUE_SOFT, 14, false);
         dropTargetPanel = inner;
         inner.setLayout(new BorderLayout());
-        inner.setPreferredSize(new Dimension(380, 88));
-        inner.setMaximumSize(new Dimension(Integer.MAX_VALUE, 88));
-        inner.setBorder(new EmptyBorder(18, 18, 18, 18));
-        inner.add(createCenteredLabel("Drop files here or click Import Logs", 13, MUTED, Font.BOLD), BorderLayout.CENTER);
+        inner.setPreferredSize(new Dimension(300, 58));
+        inner.setMaximumSize(new Dimension(Integer.MAX_VALUE, 58));
+        inner.setBorder(new EmptyBorder(10, 10, 10, 10));
+        inner.add(createCenteredLabel("Drop files here or click Import Logs", 11, MUTED, Font.BOLD), BorderLayout.CENTER);
         inner.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         inner.addMouseListener(new MouseAdapter() {
             @Override
@@ -308,20 +308,20 @@ public class ApduParserLauncherUI {
         });
         installFileDropSupport(inner);
         card.add(inner);
-        card.setMinimumSize(new Dimension(320, 196));
-        card.setPreferredSize(new Dimension(360, 196));
+        card.setMinimumSize(new Dimension(260, 142));
+        card.setPreferredSize(new Dimension(286, 142));
         return card;
     }
 
     private RoundedPanel queueCard() {
         RoundedPanel card = cardPanel();
-        card.setLayout(new BorderLayout(0, 14));
-        card.setBorder(new EmptyBorder(18, 18, 18, 18));
+        card.setLayout(new BorderLayout(0, 8));
+        card.setBorder(new EmptyBorder(10, 10, 10, 10));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
-        ResponsiveHeaderPanel header = new ResponsiveHeaderPanel(470);
-        JLabel title = createLabel("Imported Logs", 17, TEXT, Font.BOLD);
+        ResponsiveHeaderPanel header = new ResponsiveHeaderPanel(360);
+        JLabel title = createLabel("Imported Logs", 15, TEXT, Font.BOLD);
         JPanel actions = transparent(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         styleCompactButton(removeSelectedButton);
         styleCompactButton(clearAllButton);
@@ -334,44 +334,44 @@ public class ApduParserLauncherUI {
         importedLogsScrollPane.setOpaque(true);
         importedLogsScrollPane.getViewport().setOpaque(true);
         card.add(importedLogsScrollPane, BorderLayout.CENTER);
-        card.setMinimumSize(new Dimension(320, 320));
-        card.setPreferredSize(new Dimension(360, 430));
+        card.setMinimumSize(new Dimension(260, 220));
+        card.setPreferredSize(new Dimension(286, 310));
         return card;
     }
 
     private RoundedPanel previewCard() {
         RoundedPanel card = cardPanel();
-        card.setLayout(new BorderLayout(0, 14));
-        card.setBorder(new EmptyBorder(18, 18, 18, 18));
+        card.setLayout(new BorderLayout(0, 8));
+        card.setBorder(new EmptyBorder(10, 10, 10, 10));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
-        card.setMinimumSize(new Dimension(560, 520));
-        card.setPreferredSize(new Dimension(980, 720));
+        card.setMinimumSize(new Dimension(480, 360));
+        card.setPreferredSize(new Dimension(840, 560));
 
-        ResponsiveHeaderPanel header = new ResponsiveHeaderPanel(920);
+        ResponsiveHeaderPanel header = new ResponsiveHeaderPanel(740);
         JPanel headerLeft = transparent();
         headerLeft.setLayout(new BoxLayout(headerLeft, BoxLayout.Y_AXIS));
-        headerLeft.add(createLabel("APDU Inspection", 17, TEXT, Font.BOLD));
-        headerLeft.add(Box.createVerticalStrut(6));
+        headerLeft.add(createLabel("APDU Inspection", 15, TEXT, Font.BOLD));
+        headerLeft.add(Box.createVerticalStrut(3));
         selectionSummary.setText("Select a log to inspect parser output, ES10 operations, FETCH/TR traffic, and LSI activity.");
         headerLeft.add(selectionSummary);
 
-        JPanel actions = transparent(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        JPanel actions = transparent(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         FlatButton copy = createGhostButton("Copy");
         copy.addActionListener(e -> copyPreview());
         FlatButton export = createGhostButton("Open Output");
         export.addActionListener(e -> openFolder(engine.getOutputDir()));
         toggleConsoleButton.addActionListener(e -> toggleConsoleVisibility());
-        copy.setPreferredSize(new Dimension(84, 38));
-        export.setPreferredSize(new Dimension(122, 38));
-        toggleConsoleButton.setPreferredSize(new Dimension(130, 38));
+        copy.setPreferredSize(new Dimension(68, 30));
+        export.setPreferredSize(new Dimension(98, 30));
+        toggleConsoleButton.setPreferredSize(new Dimension(104, 30));
         actions.add(toggleConsoleButton);
         actions.add(copy);
         actions.add(export);
         header.setLeading(headerLeft);
         header.setTrailing(actions);
 
-        JPanel content = transparent(new BorderLayout(0, 12));
+        JPanel content = transparent(new BorderLayout(0, 6));
         content.add(buildFilterTabs(), BorderLayout.NORTH);
 
         JScrollPane rawScroll = new JScrollPane(previewArea);
@@ -388,7 +388,7 @@ public class ApduParserLauncherUI {
         outputTabs.addTab("Raw APDU", rawScroll);
         outputTabs.addTab("Enhanced Analysis", analysisScroll);
         outputTabs.addTab("Applet Extraction", appletScroll);
-        outputTabs.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        outputTabs.setFont(new Font("Segoe UI", Font.BOLD, 11));
         outputTabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         outputTabs.setForeground(TEXT);
         outputTabs.setBackground(Color.WHITE);
@@ -426,13 +426,13 @@ public class ApduParserLauncherUI {
 
     private RoundedPanel consoleCard() {
         RoundedPanel card = cardPanel();
-        card.setLayout(new BorderLayout(0, 12));
-        card.setBorder(new EmptyBorder(18, 18, 18, 18));
+        card.setLayout(new BorderLayout(0, 6));
+        card.setBorder(new EmptyBorder(10, 10, 10, 10));
         card.setAlignmentX(Component.LEFT_ALIGNMENT);
         card.setMaximumSize(new Dimension(Integer.MAX_VALUE, Integer.MAX_VALUE));
 
         JPanel header = transparent(new BorderLayout());
-        header.add(createLabel("Processing Console", 15, TEXT, Font.BOLD), BorderLayout.WEST);
+        header.add(createLabel("Processing Console", 13, TEXT, Font.BOLD), BorderLayout.WEST);
         FlatButton clear = createGhostButton("Clear");
         clear.addActionListener(e -> consoleArea.setText(""));
         header.add(clear, BorderLayout.EAST);
@@ -443,8 +443,8 @@ public class ApduParserLauncherUI {
 
         card.add(header, BorderLayout.NORTH);
         card.add(scroll, BorderLayout.CENTER);
-        card.setMinimumSize(new Dimension(560, 124));
-        card.setPreferredSize(new Dimension(980, 150));
+        card.setMinimumSize(new Dimension(480, 88));
+        card.setPreferredSize(new Dimension(840, 106));
         return card;
     }
 
@@ -877,15 +877,15 @@ public class ApduParserLauncherUI {
         RoundedPanel row = new RoundedPanel(selected(file) ? new Color(234, 244, 255) : Color.WHITE, 16, true);
         row.setLayout(new BorderLayout(10, 0));
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 52));
-        row.setBorder(new EmptyBorder(8, 12, 8, 8));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
+        row.setBorder(new EmptyBorder(4, 8, 4, 4));
         row.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
-        JLabel label = createLabel(file.getFileName().toString(), 13, TEXT, Font.PLAIN);
+        JLabel label = createLabel(file.getFileName().toString(), 11, TEXT, Font.PLAIN);
         row.add(label, BorderLayout.CENTER);
 
         FlatButton delete = createGhostButton("Delete");
-        delete.setPreferredSize(new Dimension(88, 34));
+        delete.setPreferredSize(new Dimension(62, 26));
         delete.addActionListener(e -> removeImportedLog(file));
         row.add(delete, BorderLayout.EAST);
 
@@ -1014,7 +1014,7 @@ public class ApduParserLauncherUI {
     }
 
     private JPanel trafficLights() {
-        JPanel lights = transparent(new FlowLayout(FlowLayout.LEFT, 8, 10));
+        JPanel lights = transparent(new FlowLayout(FlowLayout.LEFT, 5, 6));
         lights.add(dot(new Color(255, 95, 87)));
         lights.add(dot(new Color(254, 188, 46)));
         lights.add(dot(new Color(40, 200, 64)));
@@ -1023,8 +1023,8 @@ public class ApduParserLauncherUI {
 
     private Component dot(Color color) {
         RoundedPanel dot = new RoundedPanel(color, 99, false);
-        dot.setPreferredSize(new Dimension(12, 12));
-        dot.setMaximumSize(new Dimension(12, 12));
+        dot.setPreferredSize(new Dimension(10, 10));
+        dot.setMaximumSize(new Dimension(10, 10));
         return dot;
     }
 
@@ -1051,7 +1051,7 @@ public class ApduParserLauncherUI {
         area.setWrapStyleWord(true);
         area.setFocusable(false);
         area.setBorder(BorderFactory.createEmptyBorder());
-        area.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        area.setFont(new Font("Segoe UI", Font.PLAIN, 11));
         area.setForeground(MUTED);
         area.setAlignmentX(Component.LEFT_ALIGNMENT);
         return area;
@@ -1064,16 +1064,16 @@ public class ApduParserLauncherUI {
     }
 
     private JLabel createMetricValue(String text) {
-        return createLabel(text, 24, TEXT, Font.BOLD);
+        return createLabel(text, 18, TEXT, Font.BOLD);
     }
 
     private RoundedPanel metricCard(String title, JLabel valueLabel) {
         RoundedPanel card = cardPanel();
-        card.setPreferredSize(new Dimension(220, 94));
+        card.setPreferredSize(new Dimension(168, 68));
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBorder(new EmptyBorder(14, 16, 14, 16));
-        card.add(createLabel(title, 12, MUTED, Font.PLAIN));
-        card.add(Box.createVerticalStrut(8));
+        card.setBorder(new EmptyBorder(10, 12, 10, 12));
+        card.add(createLabel(title, 10, MUTED, Font.PLAIN));
+        card.add(Box.createVerticalStrut(4));
         card.add(valueLabel);
         return card;
     }
@@ -1090,11 +1090,11 @@ public class ApduParserLauncherUI {
     }
 
     private void styleCheckbox(JCheckBox checkBox) {
-        checkBox.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        checkBox.setFont(new Font("Segoe UI", Font.BOLD, 11));
         checkBox.setForeground(TEXT);
         checkBox.setOpaque(false);
         checkBox.setFocusPainted(false);
-        checkBox.setBorder(new EmptyBorder(0, 6, 0, 6));
+        checkBox.setBorder(new EmptyBorder(0, 4, 0, 4));
     }
 
     private JTextArea createTextArea(boolean light, Color bg, Color fg, boolean mono) {
@@ -1105,8 +1105,8 @@ public class ApduParserLauncherUI {
         area.setBackground(bg);
         area.setForeground(fg);
         area.setCaretColor(fg);
-        area.setBorder(new EmptyBorder(16, 16, 16, 16));
-        area.setFont(new Font(mono ? Font.MONOSPACED : "Segoe UI", Font.PLAIN, mono ? 13 : 12));
+        area.setBorder(new EmptyBorder(10, 10, 10, 10));
+        area.setFont(new Font(mono ? Font.MONOSPACED : "Segoe UI", Font.PLAIN, mono ? 11 : 10));
         return area;
     }
 
@@ -1126,13 +1126,13 @@ public class ApduParserLauncherUI {
 
     private void styleWideButton(FlatButton button) {
         button.setHorizontalAlignment(SwingConstants.CENTER);
-        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        button.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
         button.setAlignmentX(Component.LEFT_ALIGNMENT);
     }
 
     private void styleCompactButton(FlatButton button) {
-        button.setPreferredSize(new Dimension(156, 36));
-        button.setMinimumSize(new Dimension(156, 36));
+        button.setPreferredSize(new Dimension(118, 28));
+        button.setMinimumSize(new Dimension(118, 28));
     }
 
     private void toggleConsoleVisibility() {
@@ -1505,12 +1505,12 @@ public class ApduParserLauncherUI {
                 JPanel stack = transparent();
                 stack.setLayout(new BoxLayout(stack, BoxLayout.Y_AXIS));
                 stack.add(leftColumnPanel);
-                stack.add(Box.createVerticalStrut(14));
+                stack.add(Box.createVerticalStrut(8));
                 stack.add(centerColumnPanel);
                 add(stack, BorderLayout.CENTER);
             } else {
-                JPanel row = transparent(new BorderLayout(16, 0));
-                leftColumnPanel.setPreferredSize(new Dimension(340, leftColumnPanel.getPreferredSize().height));
+                JPanel row = transparent(new BorderLayout(10, 0));
+                leftColumnPanel.setPreferredSize(new Dimension(270, leftColumnPanel.getPreferredSize().height));
                 row.add(leftColumnPanel, BorderLayout.WEST);
                 row.add(centerColumnPanel, BorderLayout.CENTER);
                 add(row, BorderLayout.CENTER);
@@ -1592,8 +1592,8 @@ public class ApduParserLauncherUI {
             setOpaque(false);
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             setForeground(text);
-            setFont(new Font("Segoe UI", Font.BOLD, 13));
-            setBorder(new EmptyBorder(11, 18, 11, 18));
+            setFont(new Font("Segoe UI", Font.BOLD, 11));
+            setBorder(new EmptyBorder(6, 12, 6, 12));
             setRolloverEnabled(true);
         }
 
@@ -1624,10 +1624,10 @@ public class ApduParserLauncherUI {
             setForeground(fg);
 
             g2.setColor(bg);
-            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth() - 1, getHeight() - 1, 20, 20));
+            g2.fill(new RoundRectangle2D.Float(0, 0, getWidth() - 1, getHeight() - 1, 14, 14));
             g2.setColor(stroke);
             g2.setStroke(new BasicStroke(1f));
-            g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 2f, getHeight() - 2f, 20, 20));
+            g2.draw(new RoundRectangle2D.Float(0.5f, 0.5f, getWidth() - 2f, getHeight() - 2f, 14, 14));
             g2.dispose();
             super.paintComponent(g);
         }

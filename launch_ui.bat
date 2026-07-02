@@ -35,6 +35,7 @@ if errorlevel 1 (
 if not exist build\classes mkdir build\classes
 
 if not "%JAVAFX_LIB%"=="" (
+  del /q build\classes\*.class >nul 2>nul
   echo Compiling JavaFX UI...
   javac --module-path "%JAVAFX_LIB%" --add-modules javafx.controls,javafx.graphics -d build\classes src\ApduOutputAnalyzer.java src\ApduParserEngine.java src\ApduParserLauncher.java src\ApduParserLauncherUI.java src\ApduParserDesktopLauncher.java src\ApduParserLauncherFX.java
   if %errorlevel%==0 (
@@ -46,10 +47,11 @@ if not "%JAVAFX_LIB%"=="" (
 )
 
 echo Compiling Swing fallback UI...
+del /q build\classes\*.class >nul 2>nul
 javac -d build\classes src\ApduOutputAnalyzer.java src\ApduParserEngine.java src\ApduParserLauncher.java src\ApduParserLauncherUI.java src\ApduParserDesktopLauncher.java
 if errorlevel 1 exit /b 1
 
 echo Launching Swing fallback UI...
-java -cp build\classes ApduParserDesktopLauncher
+java -cp build\classes ApduParserLauncherUI
 endlocal
 exit /b %errorlevel%
