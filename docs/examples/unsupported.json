@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": "1.0.0",
+  "success": false,
+  "status": "unsupported",
+  "message": "Unsupported log format",
+  "generatedAt": "2026-07-09T15:49:04.000000000Z",
+  "sourceFile": "C:\\logs\\unsupported.txt",
+  "sourceFileName": "unsupported.txt",
+  "detectedParser": {
+    "id": "",
+    "displayName": "Unsupported",
+    "supported": false
+  },
+  "summary": {
+    "apduCount": 0,
+    "analysisEventCount": 0,
+    "appletCount": 0,
+    "warningCount": 0,
+    "exitCode": 1
+  },
+  "apdus": [],
+  "analysis": [],
+  "applets": {
+    "status": "not_applicable",
+    "message": "Unsupported log format.",
+    "allClean": [],
+    "files": []
+  },
+  "warnings": [],
+  "errors": [
+    {
+      "code": "UNSUPPORTED_FORMAT",
+      "message": "Unsupported log format",
+      "details": "No internal parser matched this file."
+    }
+  ],
+  "outputFiles": {
+    "json": "C:\\results\\unsupported.json",
+    "artifactsDir": "",
+    "apduText": "",
+    "analysisText": "",
+    "errorsText": "",
+    "legacyResultJson": "",
+    "stderrLog": "No internal parser matched this file."
+  }
+}

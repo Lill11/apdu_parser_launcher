@@ -49,7 +49,7 @@ public class ApduParserLauncher {
 
         private static void printHelp() {
             System.out.println("Usage: java src/ApduParserLauncher.java [--dry-run] [--config config.json]");
-            System.out.println("Tip: use the JavaFX UI when available, or launch_ui.bat for automatic fallback.");
+            System.out.println("Tip: use the packaged APDUParser.exe portable app for the supported desktop UI.");
         }
     }
 }

@@ -1,51 +1,19 @@
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.List;
 
 public class RegisterLogTypeSelfTest {
 
     public static void main(String[] args) throws Exception {
-        ApduParserEngine engine = new ApduParserEngine();
-        Path configPath = engine.getLauncherRoot().resolve("config.json");
-        Path backupPath = engine.getLauncherRoot().resolve("config.selftest.backup.json");
-        String parserName = "selftest_register_parser";
+        String uiSource = Files.readString(Path.of("src", "ApduParserLauncherUI.java"), StandardCharsets.UTF_8);
+        SelfTestSupport.assertTrue(!uiSource.contains("Register Log Type"), "Main UI should no longer expose Register Log Type.");
 
-        Files.copy(configPath, backupPath, StandardCopyOption.REPLACE_EXISTING);
+        String engineSource = Files.readString(Path.of("src", "ApduParserEngine.java"), StandardCharsets.UTF_8);
+        SelfTestSupport.assertTrue(!engineSource.contains("extractorFolder"), "Engine should not contain extractorFolder.");
+        SelfTestSupport.assertTrue(!engineSource.contains("scriptFile"), "Engine should not contain scriptFile configuration.");
+        SelfTestSupport.assertTrue(!engineSource.contains("stagedInputFileName"), "Engine should not contain staged input file names.");
+        SelfTestSupport.assertTrue(!engineSource.contains("commandArgs"), "Engine should not contain runtime command args for external parsers.");
 
-        try {
-            boolean alreadyExists = engine.listParserDefinitions().stream()
-                    .anyMatch(definition -> parserName.equals(definition.getName()));
-            if (alreadyExists) {
-                throw new IllegalStateException("Self-test parser already exists in config.json");
-            }
-
-            engine.addParserDefinition(new ApduParserEngine.ParserDefinition(
-                    parserName,
-                    "../html_apdu_extractor_China_Unicom",
-                    "ExtractApdusFromHtml.java",
-                    "ExtractApdusFromHtml.java",
-                    "sample-selftest.html",
-                    "apdus.txt",
-                    ".txt",
-                    "all",
-                    List.of("<html", "APDU:"),
-                    List.of(".html"),
-                    "",
-                    List.of()
-            ));
-
-            ApduParserEngine verification = new ApduParserEngine();
-            boolean found = verification.listParserDefinitions().stream()
-                    .anyMatch(definition -> parserName.equals(definition.getName()));
-            if (!found) {
-                throw new IllegalStateException("New parser was not persisted to config.json");
-            }
-
-            System.out.println("REGISTER_LOG_TYPE_SELF_TEST=PASS");
-        } finally {
-            Files.copy(backupPath, configPath, StandardCopyOption.REPLACE_EXISTING);
-            Files.deleteIfExists(backupPath);
-        }
+        System.out.println("RegisterLogTypeSelfTest passed.");
     }
 }

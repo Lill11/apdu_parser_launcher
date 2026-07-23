@@ -1,7 +1,13 @@
+.venv/
 build/
 dist/
+temp/
+logs/
 output/
 work/
+UsersjunliDocumentsCodexapdu_parser_launcherbuildpackagingpytest-temp/
+*.pyc
+__pycache__/
 run.log
 *.class
 *.jar

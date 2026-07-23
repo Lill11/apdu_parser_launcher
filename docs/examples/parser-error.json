@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": "1.0.0",
+  "success": false,
+  "status": "parser_failure",
+  "message": "Parser execution failed",
+  "generatedAt": "2026-07-09T15:49:12.000000000Z",
+  "sourceFile": "C:\\logs\\sample.log",
+  "sourceFileName": "sample.log",
+  "detectedParser": {
+    "id": "throwing",
+    "displayName": "Throwing Parser",
+    "supported": true
+  },
+  "summary": {
+    "apduCount": 0,
+    "analysisEventCount": 0,
+    "appletCount": 0,
+    "warningCount": 0,
+    "exitCode": 3
+  },
+  "apdus": [],
+  "analysis": [],
+  "applets": {
+    "status": "not_applicable",
+    "message": "Parser failed.",
+    "allClean": [],
+    "files": []
+  },
+  "warnings": [],
+  "errors": [
+    {
+      "code": "PARSER_FAILURE",
+      "message": "Parser execution failed",
+      "details": "Synthetic parser failure"
+    }
+  ],
+  "outputFiles": {
+    "json": "C:\\results\\parser-error.json",
+    "artifactsDir": "",
+    "apduText": "",
+    "analysisText": "",
+    "errorsText": "",
+    "legacyResultJson": "",
+    "stderrLog": "Synthetic parser failure"
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "parserVersion": "1.0.0",
+  "success": true,
+  "status": "completed",
+  "message": "Completed",
+  "generatedAt": "2026-07-09T15:48:33.410339700Z",
+  "sourceFile": "C:\\logs\\honor.log",
+  "sourceFileName": "honor.log",
+  "detectedParser": {
+    "id": "honor_apdutx",
+    "displayName": "Honor APDU_TX",
+    "supported": true
+  },
+  "summary": {
+    "apduCount": 3,
+    "analysisEventCount": 4,
+    "appletCount": 1,
+    "warningCount": 0,
+    "exitCode": 0
+  },
+  "apdus": [
+    {
+      "index": 1,
+      "command": "80E2910014BF3111A00C5A0A98582254820002664276810100",
+      "response": "9100",
+      "commandName": "ENVELOPE",
+      "headline": "ES10 / EnableProfile",
+      "statusWord": "9100",
+      "severity": "INFO",
+      "tag": "BF31 (EnableProfile)",
+      "sourceLine": 2,
+      "filters": ["ES10"],
+      "note": "Proactive command pending"
+    }
+  ],
+  "analysis": [
+    {
+      "index": 1,
+      "type": "reset",
+      "title": "#RESET LSE",
+      "message": "",
+      "severity": "INFO",
+      "statusWord": "-",
+      "tag": "",
+      "sourceLine": 1
+    }
+  ],
+  "applets": {
+    "status": "extracted",
+    "message": "",
+    "allClean": ["80E6020008A00000006203010C80E8000002CAFE80E60C0002BEEF"],
+    "files": [
+      {
+        "name": "applet_001.lop",
+        "lines": ["80E6020008A00000006203010C80E8000002CAFE80E60C0002BEEF"]
+      }
+    ]
+  },
+  "warnings": [],
+  "errors": [],
+  "outputFiles": {
+    "json": "C:\\results\\result.json",
+    "artifactsDir": "C:\\results\\artifacts",
+    "apduText": "C:\\results\\artifacts\\apdus.txt",
+    "analysisText": "C:\\results\\artifacts\\analysis.txt",
+    "errorsText": "C:\\results\\artifacts\\errors.txt",
+    "legacyResultJson": "C:\\results\\artifacts\\result.json",
+    "stderrLog": ""
+  }
+}

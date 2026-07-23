@@ -109,6 +109,10 @@ public final class ApduOutputAnalyzer {
         List<String> rawLines = Files.exists(rawOutputPath)
                 ? Files.readAllLines(rawOutputPath, StandardCharsets.UTF_8)
                 : List.of();
+        return analyzeEntries(originalLog, rawLines);
+    }
+
+    public static List<AnalysisItem> analyzeEntries(Path originalLog, List<String> rawLines) throws IOException {
         List<String> originalLines = Files.exists(originalLog)
                 ? Files.readAllLines(originalLog, StandardCharsets.ISO_8859_1)
                 : List.of();
