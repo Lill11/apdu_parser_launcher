@@ -26,10 +26,6 @@ public final class ApduOutputAnalyzer {
             "\\bAPDU_(tx|rx)\\b[^:]*:\\s*([0-9A-Fa-f][0-9A-Fa-f ]*)",
             Pattern.CASE_INSENSITIVE
     );
-    private static final Pattern RESET_RE = Pattern.compile("reset|rst|power on|power off", Pattern.CASE_INSENSITIVE);
-    private static final Pattern LSE_RE = Pattern.compile("LSE\\s*0*([12])", Pattern.CASE_INSENSITIVE);
-    private static final Pattern WARM_RE = Pattern.compile("warm\\s+reset|reset\\s+warm|is in warm reset[:=]?\\s*1|is in warm reset[:=]?\\s*0", Pattern.CASE_INSENSITIVE);
-    private static final Pattern COLD_RE = Pattern.compile("cold\\s+reset|reset\\s+cold", Pattern.CASE_INSENSITIVE);
     private static final String TAG_BF22 = "BF22";
     private static final String TAG_BF23 = "BF23";
     private static final String TAG_BF24 = "BF24";
@@ -113,12 +109,20 @@ public final class ApduOutputAnalyzer {
     }
 
     public static List<AnalysisItem> analyzeEntries(Path originalLog, List<String> rawLines) throws IOException {
+        return analyzeEntries(originalLog, rawLines, eventsFromRawLines(rawLines));
+    }
+
+    public static List<AnalysisItem> analyzeEntries(
+            Path originalLog,
+            List<String> rawLines,
+            List<ParsedLogEvent> parsedEvents
+    ) throws IOException {
         List<String> originalLines = Files.exists(originalLog)
                 ? Files.readAllLines(originalLog, StandardCharsets.ISO_8859_1)
                 : List.of();
 
         List<ParsedExchange> exchanges = parseOriginalLog(originalLines);
-        List<AnalysisItem> items = new ArrayList<>();
+        List<AnalysisItem> commandItems = new ArrayList<>();
         int exchangeCursor = 0;
         int apduIndex = 0;
 
@@ -134,14 +138,50 @@ public final class ApduOutputAnalyzer {
             if (match != null) {
                 exchangeCursor = match.nextIndex();
             }
+            commandItems.add(analyzeExchange(apduIndex, normalized, exchange));
+        }
 
-            if (exchange != null && exchange.resetMarker != null) {
-                items.add(AnalysisItem.reset(apduIndex, exchange.resetMarker, exchange.resetLine));
+        List<AnalysisItem> items = new ArrayList<>();
+        int commandCursor = 0;
+        int eventSequence = 0;
+        for (ParsedLogEvent event : parsedEvents == null ? List.<ParsedLogEvent>of() : parsedEvents) {
+            eventSequence++;
+            if (event instanceof ParsedLogEvent.Reset reset) {
+                items.add(AnalysisItem.reset(
+                        eventSequence,
+                        reset.resetType().name(),
+                        reset.atr(),
+                        reset.sourceLine()
+                ));
+                continue;
             }
-
-            items.add(analyzeExchange(apduIndex, normalized, exchange));
+            if (event instanceof ParsedLogEvent.Apdu apdu && commandCursor < commandItems.size()) {
+                AnalysisItem command = commandItems.get(commandCursor++);
+                items.add(command.withEventSequence(eventSequence, apdu.sourceLine()));
+            }
+        }
+        while (commandCursor < commandItems.size()) {
+            eventSequence++;
+            items.add(commandItems.get(commandCursor++).withEventSequence(eventSequence, -1));
         }
         return items;
+    }
+
+    private static List<ParsedLogEvent> eventsFromRawLines(List<String> rawLines) {
+        List<ParsedLogEvent> events = new ArrayList<>();
+        int lineNumber = 0;
+        for (String rawLine : rawLines == null ? List.<String>of() : rawLines) {
+            lineNumber++;
+            if (rawLine != null && "RESET".equalsIgnoreCase(rawLine.strip())) {
+                events.add(new ParsedLogEvent.Reset(ParsedLogEvent.ResetType.COLD_RESET, "", lineNumber));
+                continue;
+            }
+            String normalized = normalizeHex(rawLine);
+            if (!normalized.isBlank()) {
+                events.add(new ParsedLogEvent.Apdu(normalized, lineNumber));
+            }
+        }
+        return events;
     }
 
     public static String renderEnhancedOutput(List<AnalysisItem> items, FilterMode filterMode) {
@@ -152,11 +192,11 @@ public final class ApduOutputAnalyzer {
             }
 
             sb.append("[")
-                    .append(String.format(Locale.ROOT, "%04d", item.sequenceIndex))
+                    .append(String.format(Locale.ROOT, "%04d", item.eventSequence))
                     .append("] ");
 
             if (item.isResetMarker()) {
-                sb.append(item.resetMarker);
+                sb.append("RESET");
                 sb.append(System.lineSeparator());
                 continue;
             }
@@ -420,18 +460,10 @@ public final class ApduOutputAnalyzer {
     private static List<ParsedExchange> parseOriginalLog(List<String> originalLines) {
         List<ParsedExchange> exchanges = new ArrayList<>();
         ParsedExchange current = null;
-        String pendingResetMarker = null;
-        int pendingResetLine = -1;
 
         for (int i = 0; i < originalLines.size(); i++) {
             String line = originalLines.get(i);
             if (line == null || line.isBlank()) {
-                continue;
-            }
-
-            if (isResetLine(line)) {
-                pendingResetMarker = classifyResetMarker(line);
-                pendingResetLine = i + 1;
                 continue;
             }
 
@@ -444,9 +476,7 @@ public final class ApduOutputAnalyzer {
                 if (current != null) {
                     exchanges.add(current);
                 }
-                current = new ParsedExchange(event.apdu, "-", pendingResetMarker, pendingResetLine, event.lineNumber);
-                pendingResetMarker = null;
-                pendingResetLine = -1;
+                current = new ParsedExchange(event.apdu, "-", event.lineNumber);
             } else if (current != null) {
                 current.responseApdu = appendHex(current.responseApdu, event.apdu);
             }
@@ -482,31 +512,6 @@ public final class ApduOutputAnalyzer {
             return normalizedExisting;
         }
         return normalizedExisting + normalizedNext;
-    }
-
-    private static boolean isResetLine(String line) {
-        return RESET_RE.matcher(line).find() || LSE_RE.matcher(line).find();
-    }
-
-    private static String classifyResetMarker(String line) {
-        String upper = line.toUpperCase(Locale.ROOT);
-        if (upper.contains("EUICC_MEMORY_RESET")) {
-            return "#RESET EUICC_MEMORY_RESET";
-        }
-        if (upper.contains("RESET LSE")) {
-            return "#RESET LSE";
-        }
-        Matcher lse = LSE_RE.matcher(line);
-        if (lse.find()) {
-            return "#RESET LSE 0" + lse.group(1);
-        }
-        if (COLD_RE.matcher(line).find()) {
-            return "#RESET COLD";
-        }
-        if (WARM_RE.matcher(line).find()) {
-            return "#RESET WARM";
-        }
-        return "#RESET";
     }
 
     private static ApduEvent extractApduEvent(String line, int lineNumber) {
@@ -553,6 +558,7 @@ public final class ApduOutputAnalyzer {
 
     public static final class AnalysisItem {
         final int sequenceIndex;
+        final int eventSequence;
         final String commandApdu;
         final String responseApdu;
         final String commandName;
@@ -562,6 +568,8 @@ public final class ApduOutputAnalyzer {
         final String note;
         final String tagLabel;
         final String resetMarker;
+        final String resetType;
+        final String atr;
         final int sourceLine;
         final boolean es10;
         final boolean fetchOrTerminalResponse;
@@ -569,6 +577,7 @@ public final class ApduOutputAnalyzer {
 
         private AnalysisItem(
                 int sequenceIndex,
+                int eventSequence,
                 String commandApdu,
                 String responseApdu,
                 String commandName,
@@ -578,12 +587,15 @@ public final class ApduOutputAnalyzer {
                 String note,
                 String tagLabel,
                 String resetMarker,
+                String resetType,
+                String atr,
                 int sourceLine,
                 boolean es10,
                 boolean fetchOrTerminalResponse,
                 boolean configureLsi
         ) {
             this.sequenceIndex = sequenceIndex;
+            this.eventSequence = eventSequence;
             this.commandApdu = commandApdu;
             this.responseApdu = responseApdu;
             this.commandName = commandName;
@@ -593,6 +605,8 @@ public final class ApduOutputAnalyzer {
             this.note = note == null ? "" : note;
             this.tagLabel = tagLabel == null ? "" : tagLabel;
             this.resetMarker = resetMarker;
+            this.resetType = resetType == null ? "" : resetType;
+            this.atr = atr == null ? "" : atr;
             this.sourceLine = sourceLine;
             this.es10 = es10;
             this.fetchOrTerminalResponse = fetchOrTerminalResponse;
@@ -616,6 +630,7 @@ public final class ApduOutputAnalyzer {
         ) {
             return new AnalysisItem(
                     sequenceIndex,
+                    sequenceIndex,
                     commandApdu,
                     responseApdu,
                     commandName,
@@ -625,6 +640,8 @@ public final class ApduOutputAnalyzer {
                     note,
                     tagLabel,
                     null,
+                    "",
+                    "",
                     sourceLine,
                     es10,
                     fetchOrTerminalResponse,
@@ -632,22 +649,47 @@ public final class ApduOutputAnalyzer {
             );
         }
 
-        static AnalysisItem reset(int sequenceIndex, String marker, int sourceLine) {
+        static AnalysisItem reset(int eventSequence, String resetType, String atr, int sourceLine) {
             return new AnalysisItem(
-                    sequenceIndex,
+                    0,
+                    eventSequence,
                     "",
                     "-",
                     "RESET",
-                    marker,
+                    "RESET",
                     "-",
                     "INFO",
+                    "Cold Reset",
                     "",
-                    "",
-                    marker,
+                    "RESET",
+                    resetType,
+                    atr,
                     sourceLine,
                     false,
                     false,
                     false
+            );
+        }
+
+        AnalysisItem withEventSequence(int newEventSequence, int eventSourceLine) {
+            return new AnalysisItem(
+                    sequenceIndex,
+                    newEventSequence,
+                    commandApdu,
+                    responseApdu,
+                    commandName,
+                    headline,
+                    statusWord,
+                    severity,
+                    note,
+                    tagLabel,
+                    resetMarker,
+                    resetType,
+                    atr,
+                    eventSourceLine > 0 ? eventSourceLine : sourceLine,
+                    es10,
+                    fetchOrTerminalResponse,
+                    configureLsi
             );
         }
 
@@ -668,7 +710,7 @@ public final class ApduOutputAnalyzer {
                 return true;
             }
             if (isResetMarker()) {
-                return filterMode == FilterMode.ES10 || (filterMode == FilterMode.LSI && resetMarker.contains("LSE"));
+                return false;
             }
             return switch (filterMode) {
                 case ES10 -> es10;
@@ -713,15 +755,11 @@ public final class ApduOutputAnalyzer {
     private static final class ParsedExchange {
         private final String commandApdu;
         private String responseApdu;
-        private final String resetMarker;
-        private final int resetLine;
         private final int sourceLine;
 
-        private ParsedExchange(String commandApdu, String responseApdu, String resetMarker, int resetLine, int sourceLine) {
+        private ParsedExchange(String commandApdu, String responseApdu, int sourceLine) {
             this.commandApdu = commandApdu;
             this.responseApdu = responseApdu;
-            this.resetMarker = resetMarker;
-            this.resetLine = resetLine;
             this.sourceLine = sourceLine;
         }
     }

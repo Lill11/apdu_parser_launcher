@@ -51,7 +51,7 @@ class DetectedParser:
 
 @dataclass(slots=True)
 class ApduRow:
-    index: int
+    index: int | None
     command: str
     response: str
     command_name: str
@@ -62,9 +62,15 @@ class ApduRow:
     source_line: int
     filters: list[str] = field(default_factory=list)
     note: str = ""
+    event_sequence: int = 0
+    event_type: str = "APDU"
+    reset_type: str = ""
+    atr: str = ""
 
     @property
     def category(self) -> str:
+        if self.event_type == "RESET":
+            return "SYSTEM"
         if "ES10" in self.filters:
             return "ES10"
         if "FETCH/TR" in self.filters:
@@ -75,6 +81,8 @@ class ApduRow:
 
     @property
     def description(self) -> str:
+        if self.event_type == "RESET":
+            return "Cold Reset"
         return self.headline or self.command_name
 
 
@@ -88,6 +96,9 @@ class AnalysisEvent:
     status_word: str
     tag: str
     source_line: int
+    event_sequence: int = 0
+    reset_type: str = ""
+    atr: str = ""
 
 
 @dataclass(slots=True)
@@ -133,6 +144,7 @@ class ParseResult:
     detected_parser: DetectedParser
     summary: ParserSummary
     apdus: list[ApduRow]
+    events: list[ApduRow]
     analysis: list[AnalysisEvent]
     applets: AppletPayload
     warnings: list[str]

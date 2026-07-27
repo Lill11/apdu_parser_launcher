@@ -141,6 +141,22 @@ The application will then:
 6. parse the generated APDU text output
 7. install the parser only if the test succeeds
 
+Legacy output may contain an exact standalone `RESET` line mixed with APDUs.
+The wrapper removes that marker from the APDU count and converts it to an
+ordered `COLD_RESET` event. Other text containing `RESET` is ignored.
+
+The bundled Ix_USIM OH extractor uses a stricter source-format rule. It emits
+`RESET` only when one parsed record:
+
+- is incoming (`ME <---- Ix_USIM`)
+- begins directly with byte `3B`
+- has trailing description text containing `card init` (case-insensitive)
+
+The channel is not fixed, so `I0_USIM`, `I1_USIM`, and other numeric Ix_USIM
+instances are supported. RESET LSE commands, incoming APDU responses containing
+an ATR, `REFRESH_[RESET]`, and incoming `3B` data without `card init` remain
+unchanged and do not produce a reset event.
+
 Legacy extractors appear in Manage Parsers as:
 
 `Source type: Legacy Java Extractor`

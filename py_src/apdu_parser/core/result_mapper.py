@@ -52,9 +52,55 @@ def map_result_payload(payload: dict) -> ParseResult:
             source_line=int(item.get("sourceLine", 0)),
             filters=[str(v) for v in item.get("filters", [])],
             note=str(item.get("note", "")),
+            event_sequence=int(item.get("eventSequence", item.get("index", 0))),
         )
         for item in payload.get("apdus", [])
     ]
+
+    events_payload = payload.get("events")
+    if events_payload is None:
+        events = list(apdus)
+    else:
+        events = []
+        for item in events_payload:
+            event_type = str(item.get("type", "APDU")).upper()
+            if event_type == "RESET":
+                events.append(
+                    ApduRow(
+                        index=None,
+                        command="RESET",
+                        response=str(item.get("atr", "")),
+                        command_name="RESET",
+                        headline="RESET",
+                        status_word="",
+                        severity="INFO",
+                        tag="",
+                        source_line=int(item.get("sourceLine", 0)),
+                        filters=[],
+                        note="Cold Reset",
+                        event_sequence=int(item.get("sequence", 0)),
+                        event_type="RESET",
+                        reset_type=str(item.get("resetType", "")),
+                        atr=str(item.get("atr", "")),
+                    )
+                )
+                continue
+            events.append(
+                ApduRow(
+                    index=int(item.get("apduIndex", 0)),
+                    command=str(item.get("command", "")),
+                    response=str(item.get("response", "")),
+                    command_name=str(item.get("commandName", "")),
+                    headline=str(item.get("headline", "")),
+                    status_word=str(item.get("statusWord", "")),
+                    severity=str(item.get("severity", "")),
+                    tag=str(item.get("tag", "")),
+                    source_line=int(item.get("sourceLine", 0)),
+                    filters=[str(v) for v in item.get("filters", [])],
+                    note=str(item.get("note", "")),
+                    event_sequence=int(item.get("sequence", 0)),
+                )
+            )
 
     analysis = [
         AnalysisEvent(
@@ -66,6 +112,9 @@ def map_result_payload(payload: dict) -> ParseResult:
             status_word=str(item.get("statusWord", "")),
             tag=str(item.get("tag", "")),
             source_line=int(item.get("sourceLine", 0)),
+            event_sequence=int(item.get("eventSequence", item.get("index", 0))),
+            reset_type=str(item.get("resetType", "")),
+            atr=str(item.get("atr", "")),
         )
         for item in payload.get("analysis", [])
     ]
@@ -112,6 +161,7 @@ def map_result_payload(payload: dict) -> ParseResult:
             exit_code=int(summary.get("exitCode", 0)),
         ),
         apdus=apdus,
+        events=events,
         analysis=analysis,
         applets=applets,
         warnings=[str(v) for v in payload.get("warnings", [])],

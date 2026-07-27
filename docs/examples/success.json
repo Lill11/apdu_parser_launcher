@@ -5,11 +5,11 @@
   "status": "completed",
   "message": "Completed",
   "generatedAt": "2026-07-09T15:48:33.410339700Z",
-  "sourceFile": "C:\\logs\\honor.log",
-  "sourceFileName": "honor.log",
+  "sourceFile": "C:\\logs\\pcsc.log",
+  "sourceFileName": "pcsc.log",
   "detectedParser": {
-    "id": "honor_apdutx",
-    "displayName": "Honor APDU_TX",
+    "id": "pcsc_terminal",
+    "displayName": "PCSC Terminal",
     "supported": true
   },
   "summary": {
@@ -22,6 +22,7 @@
   "apdus": [
     {
       "index": 1,
+      "eventSequence": 2,
       "command": "80E2910014BF3111A00C5A0A98582254820002664276810100",
       "response": "9100",
       "commandName": "ENVELOPE",
@@ -34,16 +35,44 @@
       "note": "Proactive command pending"
     }
   ],
+  "events": [
+    {
+      "sequence": 1,
+      "type": "RESET",
+      "resetType": "COLD_RESET",
+      "label": "RESET",
+      "atr": "3B9F96803FC7838031E073F62113674B0758E0240200A1",
+      "sourceLine": 7
+    },
+    {
+      "sequence": 2,
+      "type": "APDU",
+      "apduIndex": 1,
+      "command": "80E2910014BF3111A00C5A0A98582254820002664276810100",
+      "response": "9100",
+      "commandName": "ENVELOPE",
+      "headline": "ES10 / EnableProfile",
+      "statusWord": "9100",
+      "severity": "INFO",
+      "tag": "BF31 (EnableProfile)",
+      "filters": ["ES10"],
+      "note": "Proactive command pending",
+      "sourceLine": 8
+    }
+  ],
   "analysis": [
     {
-      "index": 1,
+      "index": 0,
+      "eventSequence": 1,
       "type": "reset",
-      "title": "#RESET LSE",
-      "message": "",
+      "title": "RESET",
+      "message": "Cold Reset",
       "severity": "INFO",
-      "statusWord": "-",
+      "statusWord": "",
       "tag": "",
-      "sourceLine": 1
+      "resetType": "COLD_RESET",
+      "atr": "3B9F96803FC7838031E073F62113674B0758E0240200A1",
+      "sourceLine": 7
     }
   ],
   "applets": {

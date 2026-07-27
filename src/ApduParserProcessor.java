@@ -61,7 +61,11 @@ public final class ApduParserProcessor {
 
             LogParser.ParseResult parseResult = detection.parser().parse(inputFile);
             List<String> rawApdus = parseResult.apdus();
-            List<ApduOutputAnalyzer.AnalysisItem> analysisItems = ApduOutputAnalyzer.analyzeEntries(inputFile, rawApdus);
+            List<ApduOutputAnalyzer.AnalysisItem> analysisItems = ApduOutputAnalyzer.analyzeEntries(
+                    inputFile,
+                    rawApdus,
+                    parseResult.events()
+            );
             String analysisText = ApduOutputAnalyzer.renderEnhancedOutput(analysisItems, ApduOutputAnalyzer.FilterMode.ALL);
             AppletExtractor.ExtractionResult appletResult = AppletExtractor.extract(rawApdus);
 
@@ -89,8 +93,8 @@ public final class ApduParserProcessor {
         Files.createDirectories(artifactsDir);
         cleanupResultFolder(artifactsDir);
 
-        if (!result.rawApdus().isEmpty()) {
-            Files.write(result.rawOutputPath(artifactsDir), result.rawApdus(), StandardCharsets.UTF_8,
+        if (!result.analysisItems().isEmpty()) {
+            Files.write(result.rawOutputPath(artifactsDir), result.normalizedOutputLines(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         }
         if (!result.analysisText().isBlank()) {
@@ -301,6 +305,14 @@ public final class ApduParserProcessor {
             return appletResult.applets().size();
         }
 
+        List<String> normalizedOutputLines() {
+            List<String> lines = new ArrayList<>();
+            for (ApduOutputAnalyzer.AnalysisItem item : analysisItems) {
+                lines.add(item.isResetMarker() ? "RESET" : item.commandApdu);
+            }
+            return List.copyOf(lines);
+        }
+
         Path rawOutputPath(Path artifactsDir) {
             return artifactsDir.resolve("apdus.txt");
         }
@@ -404,6 +416,7 @@ public final class ApduParserProcessor {
             ApduOutputAnalyzer.AnalysisItem item = commandItems.get(i);
             sb.append("    {\n");
             appendJsonNumberField(sb, "index", item.sequenceIndex, true, 6);
+            appendJsonNumberField(sb, "eventSequence", item.eventSequence, true, 6);
             appendJsonField(sb, "command", item.commandApdu, true, 6);
             appendJsonField(sb, "response", item.responseApdu, true, 6);
             appendJsonField(sb, "commandName", item.commandName, true, 6);
@@ -435,17 +448,65 @@ public final class ApduParserProcessor {
         }
         sb.append("  ],\n");
 
+        sb.append("  \"events\": [\n");
+        for (int i = 0; i < result.analysisItems().size(); i++) {
+            ApduOutputAnalyzer.AnalysisItem item = result.analysisItems().get(i);
+            sb.append("    {\n");
+            appendJsonNumberField(sb, "sequence", item.eventSequence, true, 6);
+            appendJsonField(sb, "type", item.isResetMarker() ? "RESET" : "APDU", true, 6);
+            if (item.isResetMarker()) {
+                appendJsonField(sb, "resetType", item.resetType, true, 6);
+                appendJsonField(sb, "label", "RESET", true, 6);
+                appendJsonField(sb, "atr", item.atr, true, 6);
+                appendJsonNumberField(sb, "sourceLine", item.sourceLine, false, 6);
+            } else {
+                appendJsonNumberField(sb, "apduIndex", item.sequenceIndex, true, 6);
+                appendJsonField(sb, "command", item.commandApdu, true, 6);
+                appendJsonField(sb, "response", item.responseApdu, true, 6);
+                appendJsonField(sb, "commandName", item.commandName, true, 6);
+                appendJsonField(sb, "headline", item.headline, true, 6);
+                appendJsonField(sb, "statusWord", item.statusWord, true, 6);
+                appendJsonField(sb, "severity", item.severity, true, 6);
+                appendJsonField(sb, "tag", item.tagLabel, true, 6);
+                sb.append("      \"filters\": [");
+                List<String> filters = new ArrayList<>();
+                if (item.es10) {
+                    filters.add("ES10");
+                }
+                if (item.fetchOrTerminalResponse) {
+                    filters.add("FETCH/TR");
+                }
+                if (item.isConfigureLsi() || "Manage LSI".equals(item.commandName)) {
+                    filters.add("LSI");
+                }
+                for (int f = 0; f < filters.size(); f++) {
+                    if (f > 0) {
+                        sb.append(", ");
+                    }
+                    sb.append("\"").append(escapeJson(filters.get(f))).append("\"");
+                }
+                sb.append("],\n");
+                appendJsonField(sb, "note", item.note, true, 6);
+                appendJsonNumberField(sb, "sourceLine", item.sourceLine, false, 6);
+            }
+            sb.append(i == result.analysisItems().size() - 1 ? "    }\n" : "    },\n");
+        }
+        sb.append("  ],\n");
+
         sb.append("  \"analysis\": [\n");
         for (int i = 0; i < result.analysisItems().size(); i++) {
             ApduOutputAnalyzer.AnalysisItem item = result.analysisItems().get(i);
             sb.append("    {\n");
             appendJsonNumberField(sb, "index", item.sequenceIndex, true, 6);
+            appendJsonNumberField(sb, "eventSequence", item.eventSequence, true, 6);
             appendJsonField(sb, "type", item.isResetMarker() ? "reset" : "apdu", true, 6);
             appendJsonField(sb, "title", item.headline, true, 6);
             appendJsonField(sb, "message", item.note, true, 6);
             appendJsonField(sb, "severity", item.severity, true, 6);
             appendJsonField(sb, "statusWord", item.statusWord, true, 6);
             appendJsonField(sb, "tag", item.tagLabel, true, 6);
+            appendJsonField(sb, "resetType", item.resetType, true, 6);
+            appendJsonField(sb, "atr", item.atr, true, 6);
             appendJsonNumberField(sb, "sourceLine", item.sourceLine, false, 6);
             sb.append(i == result.analysisItems().size() - 1 ? "    }\n" : "    },\n");
         }

@@ -1,4 +1,4 @@
-Bundled plugin compilation record.
-Compiler: bundled runtime/bin/javac.exe
-Encoding: UTF-8
-Exit code: 0
+Bundled Ix_USIM legacy extractor compilation succeeded.
+Version: 1.1.0
+Cold Reset rule: incoming Ix_USIM record, first byte 3B, description contains "card init".
+Real-log validation: 2059 APDUs preserved, 6 RESET events added in chronological order.

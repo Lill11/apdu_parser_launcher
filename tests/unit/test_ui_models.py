@@ -4,8 +4,10 @@ from pathlib import Path
 
 from apdu_parser.core.models import (
     AnalysisEvent,
+    ApduRow,
     AppletPayload,
     DetectedParser,
+    FilterMode,
     ImportedLogItem,
     LogStatus,
     OutputFiles,
@@ -65,6 +67,7 @@ def test_result_tabs_render_completed_result(qapp):
         detected_parser=DetectedParser(parser_id="pcsc", display_name="pcsc", supported=True),
         summary=ParserSummary(apdu_count=1, analysis_event_count=1, applet_count=0, warning_count=0, exit_code=0),
         apdus=[],
+        events=[],
         analysis=[
             AnalysisEvent(
                 index=12,
@@ -96,3 +99,33 @@ def test_result_tabs_render_completed_result(qapp):
 
     assert "DisableProfile" in tabs.analysis_browser.toPlainText()
     assert tabs.error_summary.text() == "No parser errors."
+
+
+def test_result_tabs_show_reset_only_in_all_filter(qapp):
+    tabs = ResultTabs()
+    reset = ApduRow(
+        index=None,
+        command="RESET",
+        response="3B9F96803FC7838031E073F62113674B0758E0240200A1",
+        command_name="RESET",
+        headline="RESET",
+        status_word="",
+        severity="INFO",
+        tag="",
+        source_line=7,
+        event_sequence=1,
+        event_type="RESET",
+        reset_type="COLD_RESET",
+        atr="3B9F96803FC7838031E073F62113674B0758E0240200A1",
+    )
+    tabs.apdu_model.set_rows([reset])
+
+    tabs.set_filter_mode(FilterMode.ALL)
+    assert tabs.apdu_proxy.rowCount() == 1
+    tabs.search_input.setText("cold reset")
+    assert tabs.apdu_proxy.rowCount() == 1
+    tabs.search_input.clear()
+
+    for mode in (FilterMode.ES10, FilterMode.FETCH_TR, FilterMode.LSI):
+        tabs.set_filter_mode(mode)
+        assert tabs.apdu_proxy.rowCount() == 0

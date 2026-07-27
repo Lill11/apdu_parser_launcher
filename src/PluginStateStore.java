@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 
 public class PluginStateStore {
 
-    private static final String BUNDLED_PLUGIN_SET = "v1";
+    private static final String BUNDLED_PLUGIN_SET = "v2";
 
     private final Path pluginsRoot;
     private final Path bundledPluginsRoot;
@@ -240,9 +240,7 @@ public class PluginStateStore {
                     continue;
                 }
                 Path targetDirectory = pluginsInstalledDir().resolve(sourceDirectory.getFileName().toString());
-                if (!Files.exists(targetDirectory)) {
-                    copyDirectory(sourceDirectory, targetDirectory);
-                }
+                copyDirectory(sourceDirectory, targetDirectory);
             }
         }
         Files.writeString(marker, "Bundled plugin set " + bundledPluginSet + " installed.\n", StandardCharsets.UTF_8);

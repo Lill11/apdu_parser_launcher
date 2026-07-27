@@ -357,6 +357,7 @@ function Publish-PortableExamples {
     New-Item -ItemType Directory -Path $sampleSourceDestination -Force | Out-Null
     Copy-FileAtomic -Source (Join-Path $ExamplesRoot "sample-source-parser\README.md") -Destination (Join-Path $sampleSourceDestination "README.md")
     Copy-FileAtomic -Source $SampleSourcePluginFile -Destination (Join-Path $sampleSourceDestination "SourcePcscPlugin.java")
+    Copy-FileAtomic -Source (Join-Path $ExamplesRoot "sample-source-parser\sample.log") -Destination (Join-Path $sampleSourceDestination "sample.log")
 }
 
 function Invoke-PackagedSmoke {
@@ -482,7 +483,10 @@ foreach ($testClass in @(
     "PathHandlingSelfTest",
     "ConfigPersistenceSelfTest",
     "BundledPluginSeedSelfTest",
-    "PluginLifecycleSelfTest"
+    "PluginLifecycleSelfTest",
+    "PcscColdResetSelfTest",
+    "AllParserColdResetSelfTest",
+    "LegacyIxUsimColdResetSelfTest"
 )) {
     Invoke-External -FilePath $Java -Arguments @("-cp", (Join-Path $ParserBuildRoot "classes"), $testClass) -Environment $JavaTestEnvironment
 }

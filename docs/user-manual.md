@@ -134,6 +134,30 @@ Use this tab when:
 - a parser failed
 - Java source plugin compilation failed
 
+### Cold Reset markers
+
+When a supported log contains parser-specific evidence of a physical card
+reset, the result timeline and exported `apdus.txt` contain a standalone:
+
+```text
+RESET
+```
+
+`RESET LSE` / `RESET LSI` commands, `REFRESH_[RESET]`, warm-reset debug text,
+and ATR-looking bytes inside APDU responses are not converted into Cold Reset
+events.
+
+Legacy Java extractors can preserve a physical reset by writing an exact
+standalone `RESET` line between their APDU lines:
+
+```text
+RESET
+00A4040000
+80E2910003BF2E00
+RESET
+00A40000023F00
+```
+
 ## 7. Filters
 
 The filter chips above the result tabs help reduce noise.

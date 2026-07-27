@@ -344,6 +344,10 @@ public final class LogParserRegistry {
             LogParser.ParseResult parsed = delegate.parse(inputFile);
             return new PluginParseResult(parsed.apdus(), parsed.warnings());
         }
+
+        private LogParser.ParseResult parseInternal(Path inputFile) throws IOException {
+            return delegate.parse(inputFile);
+        }
     }
 
     private static final class ParserBackedLogParser implements LogParser {
@@ -382,13 +386,33 @@ public final class LogParserRegistry {
         @Override
         public ParseResult parse(Path inputFile) throws IOException {
             try {
+                if (descriptor.plugin() instanceof LegacyParserPluginAdapter builtInAdapter) {
+                    return builtInAdapter.parseInternal(inputFile);
+                }
                 PluginParseResult parsed = descriptor.parse(inputFile);
-                return new ParseResult(parsed.apdus(), parsed.warnings());
+                return parsePluginOutput(parsed);
             } catch (IOException ioException) {
                 throw ioException;
             } catch (Exception ex) {
                 throw new IllegalStateException(ex.getMessage() == null ? ex.toString() : ex.getMessage(), ex);
             }
         }
+    }
+
+    static LogParser.ParseResult parsePluginOutput(PluginParseResult parsed) {
+        List<String> apdus = new ArrayList<>();
+        List<ParsedLogEvent> events = new ArrayList<>();
+        int outputLine = 0;
+        for (String value : parsed.apdus()) {
+            outputLine++;
+            if ("RESET".equals(value)) {
+                events.add(new ParsedLogEvent.Reset(
+                        ParsedLogEvent.ResetType.COLD_RESET, "", outputLine));
+            } else {
+                apdus.add(value);
+                events.add(new ParsedLogEvent.Apdu(value, outputLine));
+            }
+        }
+        return new LogParser.ParseResult(apdus, parsed.warnings(), events);
     }
 }
