@@ -72,6 +72,8 @@ The current build includes internal parsers for:
 - PC/SC terminal logs
 - HTML APDU reports
 
+The portable build also includes the `Ix USIM APDU Extractor OH` legacy plugin. It is installed automatically into the user's plugin directory on first launch, so no separate Java file is needed.
+
 If a file is not recognized, it stays visible in the app and is marked as unsupported.
 
 ## Where User Data Is Stored

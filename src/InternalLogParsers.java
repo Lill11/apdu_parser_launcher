@@ -158,7 +158,10 @@ final class InternalLogParsers {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     Frame frame = parseFrame(line);
-                    if (frame == null || frame.bytes.isEmpty()) {
+                    if (frame == null) {
+                        continue;
+                    }
+                    if (frame.tx && frame.bytes.isEmpty()) {
                         continue;
                     }
 
@@ -288,7 +291,23 @@ final class InternalLogParsers {
             }
 
             String payload = line.substring(Math.min(payloadStart, line.length()));
-            List<String> bytes = extractHexBytes(payload);
+            List<String> bytes;
+            int openBrace = payload.indexOf('{');
+            if (openBrace >= 0) {
+                int closeBrace = payload.indexOf('}', openBrace + 1);
+                String visiblePayload = closeBrace >= 0
+                        ? payload.substring(openBrace + 1, closeBrace)
+                        : payload.substring(openBrace + 1);
+                bytes = extractHexBytes(visiblePayload);
+            } else if (markerIndex >= 0 && !tx && upper.contains("RX DATA =")) {
+                Matcher firstByte = HEX_BYTE.matcher(payload);
+                bytes = new ArrayList<>();
+                if (firstByte.find()) {
+                    bytes.add(firstByte.group().toUpperCase(Locale.ROOT));
+                }
+            } else {
+                bytes = extractHexBytes(payload);
+            }
             return new Frame(tx, bytes, extractSourceLineNumber(line));
         }
 
@@ -314,7 +333,8 @@ final class InternalLogParsers {
                 return false;
             }
             int cla = Integer.parseInt(candidate.get(0), 16);
-            return COMMON_CLA.contains(cla) || isLogicalChannelCla(cla) || isLikelyProprietaryCla(cla);
+            int ins = Integer.parseInt(candidate.get(1), 16);
+            return ins != 0x00 && (COMMON_CLA.contains(cla) || isLogicalChannelCla(cla) || isLikelyProprietaryCla(cla));
         }
 
         private static boolean isLogicalChannelCla(int cla) {

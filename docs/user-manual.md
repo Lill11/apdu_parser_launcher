@@ -204,6 +204,8 @@ Built-in parsers:
 - cannot be removed
 - are always part of the application
 
+The portable package also ships with `Ix USIM APDU Extractor OH`. On first launch it is copied to the user plugin directory automatically and appears in Manage Parsers as a legacy Java extractor. Its source is preserved so it can be recompiled, disabled, or removed like other user plugins.
+
 ## 11. Add a Parser Plugin
 
 If your team already has a compiled parser plugin:

@@ -600,11 +600,49 @@ public final class ApduParserCli {
         }
 
         private static String readJsonString(String json, String field, String fallback) {
-            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\"" + java.util.regex.Pattern.quote(field) + "\"\\s*:\\s*\"([^\"]*)\"");
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                    "\"" + java.util.regex.Pattern.quote(field) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"");
             java.util.regex.Matcher matcher = pattern.matcher(json == null ? "" : json);
-            return matcher.find()
-                    ? matcher.group(1).replace("\\n", "\n").replace("\\\"", "\"").replace("\\\\", "\\")
-                    : fallback;
+            return matcher.find() ? decodeJsonString(matcher.group(1)) : fallback;
+        }
+
+        private static String decodeJsonString(String encoded) {
+            StringBuilder decoded = new StringBuilder(encoded.length());
+            for (int index = 0; index < encoded.length(); index++) {
+                char current = encoded.charAt(index);
+                if (current != '\\') {
+                    decoded.append(current);
+                    continue;
+                }
+                if (++index >= encoded.length()) {
+                    throw new IllegalArgumentException("Invalid JSON string escape.");
+                }
+                char escaped = encoded.charAt(index);
+                switch (escaped) {
+                    case '"' -> decoded.append('"');
+                    case '\\' -> decoded.append('\\');
+                    case '/' -> decoded.append('/');
+                    case 'b' -> decoded.append('\b');
+                    case 'f' -> decoded.append('\f');
+                    case 'n' -> decoded.append('\n');
+                    case 'r' -> decoded.append('\r');
+                    case 't' -> decoded.append('\t');
+                    case 'u' -> {
+                        if (index + 4 >= encoded.length()) {
+                            throw new IllegalArgumentException("Invalid JSON unicode escape.");
+                        }
+                        String hex = encoded.substring(index + 1, index + 5);
+                        try {
+                            decoded.append((char) Integer.parseInt(hex, 16));
+                        } catch (NumberFormatException ex) {
+                            throw new IllegalArgumentException("Invalid JSON unicode escape: \\u" + hex, ex);
+                        }
+                        index += 4;
+                    }
+                    default -> throw new IllegalArgumentException("Invalid JSON string escape: \\" + escaped);
+                }
+            }
+            return decoded.toString();
         }
     }
 }

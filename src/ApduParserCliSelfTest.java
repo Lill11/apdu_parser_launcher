@@ -38,6 +38,29 @@ public class ApduParserCliSelfTest {
         SelfTestSupport.assertTrue(Files.exists(successArtifacts.resolve("result.json")), "CLI should write legacy result.json.");
         SelfTestSupport.assertTrue(Files.exists(successArtifacts.resolve("applets").resolve("all_clean.lop")), "CLI should write applet aggregate output.");
 
+        Path requestInput = root.resolve("request path").resolve("newOS_powercycle_APDU.txt");
+        Files.createDirectories(requestInput.getParent());
+        Files.writeString(requestInput,
+                "SLOT_2 Type = TX Data = { 00 A4 00 04 02 }\n" +
+                        "SLOT_2 Type = TX Data = { 3F 00 }\n" +
+                        "SLOT_2 Type = RX Data = { 90 00 }\n",
+                StandardCharsets.UTF_8);
+        Path requestJson = root.resolve("request-path-result.json");
+        Path requestFile = root.resolve("parse-request.json");
+        Files.writeString(requestFile,
+                "{\n" +
+                        "  \"input\": \"" + jsonEscape(requestInput.toString()) + "\",\n" +
+                        "  \"jsonOut\": \"" + jsonEscape(requestJson.toString()) + "\",\n" +
+                        "  \"detectOnly\": \"false\"\n" +
+                        "}\n",
+                StandardCharsets.UTF_8);
+        int requestCode = ApduParserCli.run(new String[] {
+                "--request-file", requestFile.toString()
+        }, line -> { });
+        SelfTestSupport.assertEquals(0, requestCode, "Request-file paths ending in \\newOS must preserve the literal backslash.");
+        String requestBody = Files.readString(requestJson, StandardCharsets.UTF_8);
+        SelfTestSupport.assertContains(requestBody, "\"id\": \"oppo_txdata\"", "Request-file path regression should still detect the parser.");
+
         Path unsupportedLog = root.resolve("unsupported.txt");
         Files.writeString(unsupportedLog, "hello world\n", StandardCharsets.UTF_8);
         Path unsupportedJson = root.resolve("unsupported.json");
@@ -87,6 +110,10 @@ public class ApduParserCliSelfTest {
         SelfTestSupport.assertContains(parserFailureBody, "\"status\": \"parser_failure\"", "Parser failure JSON should show parser_failure status.");
 
         System.out.println("ApduParserCliSelfTest passed.");
+    }
+
+    private static String jsonEscape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static final class ThrowingParser implements LogParser {

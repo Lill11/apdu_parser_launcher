@@ -89,6 +89,10 @@ public final class AppEnvironment {
         return applicationRoot().resolve("parser").resolve("plugin-api.jar");
     }
 
+    public static Path bundledPluginsDir() {
+        return applicationRoot().resolve("parser").resolve("bundled-plugins");
+    }
+
     public static Path parserJarOrClassesPath() {
         try {
             return Path.of(AppEnvironment.class.getProtectionDomain().getCodeSource().getLocation().toURI())

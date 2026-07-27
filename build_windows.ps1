@@ -481,6 +481,7 @@ foreach ($testClass in @(
     "Phase1ParitySelfTest",
     "PathHandlingSelfTest",
     "ConfigPersistenceSelfTest",
+    "BundledPluginSeedSelfTest",
     "PluginLifecycleSelfTest"
 )) {
     Invoke-External -FilePath $Java -Arguments @("-cp", (Join-Path $ParserBuildRoot "classes"), $testClass) -Environment $JavaTestEnvironment
@@ -525,6 +526,7 @@ Assert-Path (Join-Path $PortableRoot "APDUParser.exe") "Portable executable"
 New-Item -ItemType Directory -Path (Join-Path $PortableRoot "parser") -Force | Out-Null
 Copy-FileAtomic -Source $ParserJar -Destination (Join-Path $PortableRoot "parser\apdu-parser.jar")
 Copy-FileAtomic -Source $PluginApiJar -Destination (Join-Path $PortableRoot "parser\plugin-api.jar")
+Copy-DirectoryContent -Source (Join-Path $ProjectRoot "bundled-plugins") -Destination (Join-Path $PortableRoot "parser\bundled-plugins")
 Copy-DirectoryContent -Source $RuntimeRoot -Destination (Join-Path $PortableRoot "runtime")
 Publish-PortableExamples -DestinationRoot (Join-Path $PortableRoot "examples")
 Copy-DirectoryContent -Source (Join-Path $ProjectRoot "docs") -Destination (Join-Path $PortableRoot "docs")
@@ -534,6 +536,7 @@ Write-Step "Validating final portable directory structure"
 Assert-Path (Join-Path $PortableRoot "APDUParser.exe") "Portable APDUParser.exe"
 Assert-Path (Join-Path $PortableRoot "parser\apdu-parser.jar") "Portable parser JAR"
 Assert-Path (Join-Path $PortableRoot "parser\plugin-api.jar") "Portable plugin API JAR"
+Assert-Path (Join-Path $PortableRoot "parser\bundled-plugins\ix_usim_apdu_extractor_oh\plugin.jar") "Bundled Ix USIM parser plugin"
 Assert-Path (Join-Path $PortableRoot "runtime\bin\java.exe") "Portable runtime java.exe"
 Assert-Path (Join-Path $PortableRoot "runtime\bin\javac.exe") "Portable runtime javac.exe"
 Assert-Path (Join-Path $PortableRoot "runtime\bin\jar.exe") "Portable runtime jar.exe"

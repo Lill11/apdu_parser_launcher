@@ -3,6 +3,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -14,19 +15,30 @@ import java.util.regex.Pattern;
 
 public class PluginStateStore {
 
+    private static final String BUNDLED_PLUGIN_SET = "v1";
+
     private final Path pluginsRoot;
+    private final Path bundledPluginsRoot;
+    private final String bundledPluginSet;
 
     public PluginStateStore() {
-        this(AppEnvironment.pluginsDir());
+        this(AppEnvironment.pluginsDir(), AppEnvironment.bundledPluginsDir(), BUNDLED_PLUGIN_SET);
     }
 
     public PluginStateStore(Path pluginsRoot) {
+        this(pluginsRoot, null, "");
+    }
+
+    PluginStateStore(Path pluginsRoot, Path bundledPluginsRoot, String bundledPluginSet) {
         this.pluginsRoot = pluginsRoot.toAbsolutePath().normalize();
+        this.bundledPluginsRoot = bundledPluginsRoot == null ? null : bundledPluginsRoot.toAbsolutePath().normalize();
+        this.bundledPluginSet = bundledPluginSet == null ? "" : bundledPluginSet.trim();
     }
 
     public void ensureLayout() throws IOException {
         Files.createDirectories(pluginsInstalledDir());
         Files.createDirectories(pluginsRoot);
+        seedBundledPlugins();
     }
 
     public Map<String, Boolean> loadBuiltInStates() throws IOException {
@@ -111,6 +123,16 @@ public class PluginStateStore {
         }
 
         String json = Files.readString(metadataPath, StandardCharsets.UTF_8);
+        ParserSourceType sourceType = ParserSourceType.valueOf(
+                readJsonString(json, "sourceType", ParserSourceType.PLUGIN_JAR.name()).toUpperCase(Locale.ROOT));
+        Path preservedSource = readOptionalPath(json, "preservedSourceFile");
+        if (preservedSource == null && sourceType != ParserSourceType.PLUGIN_JAR) {
+            preservedSource = firstJavaSource(installDirectory.resolve("source"));
+        }
+        Path compileLog = readOptionalPath(json, "compileLogPath");
+        if (compileLog == null && Files.isRegularFile(installDirectory.resolve("compile.log"))) {
+            compileLog = installDirectory.resolve("compile.log").toAbsolutePath().normalize();
+        }
         return new ParserInstallMetadata(
                 readJsonString(json, "parserId", installDirectory.getFileName().toString()),
                 readJsonString(json, "name", installDirectory.getFileName().toString()),
@@ -118,16 +140,16 @@ public class PluginStateStore {
                 readJsonInt(json, "pluginApiVersion", 0),
                 readJsonString(json, "implementationClass", ""),
                 readJsonArray(json, "supportedExtensions"),
-                ParserSourceType.valueOf(readJsonString(json, "sourceType", ParserSourceType.PLUGIN_JAR.name()).toUpperCase(Locale.ROOT)),
+                sourceType,
                 readJsonBoolean(json, "builtIn", false),
                 readJsonBoolean(json, "enabled", true),
                 ParserValidationStatus.valueOf(readJsonString(json, "validationStatus", ParserValidationStatus.INVALID_PLUGIN.name()).toUpperCase(Locale.ROOT)),
                 readJsonString(json, "validationMessage", ""),
                 installDirectory,
                 pluginJar,
-                readOptionalPath(json, "preservedSourceFile"),
+                preservedSource,
                 readJsonString(json, "originalSourcePath", ""),
-                readOptionalPath(json, "compileLogPath"),
+                compileLog,
                 readJsonString(json, "legacyMainClass", ""),
                 readJsonString(json, "legacyCommandPattern", ""),
                 readJsonString(json, "legacyOutputFileName", ""),
@@ -202,6 +224,55 @@ public class PluginStateStore {
 
     public Path builtInParserStatePath() {
         return pluginsRoot.resolve("builtins.json");
+    }
+
+    private void seedBundledPlugins() throws IOException {
+        if (bundledPluginsRoot == null || bundledPluginSet.isBlank() || !Files.isDirectory(bundledPluginsRoot)) {
+            return;
+        }
+        Path marker = pluginsRoot.resolve(".bundled-plugins-" + bundledPluginSet);
+        if (Files.exists(marker)) {
+            return;
+        }
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(bundledPluginsRoot)) {
+            for (Path sourceDirectory : stream) {
+                if (!Files.isDirectory(sourceDirectory)) {
+                    continue;
+                }
+                Path targetDirectory = pluginsInstalledDir().resolve(sourceDirectory.getFileName().toString());
+                if (!Files.exists(targetDirectory)) {
+                    copyDirectory(sourceDirectory, targetDirectory);
+                }
+            }
+        }
+        Files.writeString(marker, "Bundled plugin set " + bundledPluginSet + " installed.\n", StandardCharsets.UTF_8);
+    }
+
+    private static void copyDirectory(Path sourceDirectory, Path targetDirectory) throws IOException {
+        try (var paths = Files.walk(sourceDirectory)) {
+            for (Path source : paths.toList()) {
+                Path relative = sourceDirectory.relativize(source);
+                Path target = targetDirectory.resolve(relative);
+                if (Files.isDirectory(source)) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.createDirectories(target.getParent());
+                    Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
+    }
+
+    private static Path firstJavaSource(Path sourceDirectory) throws IOException {
+        if (!Files.isDirectory(sourceDirectory)) {
+            return null;
+        }
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(sourceDirectory, "*.java")) {
+            for (Path source : stream) {
+                return source.toAbsolutePath().normalize();
+            }
+        }
+        return null;
     }
 
     static String readJsonString(String json, String field, String fallback) {

@@ -24,6 +24,13 @@ public class InternalParsersSelfTest {
                 "oppo_txdata",
                 "801200000B0102030405060708090A0B");
 
+        assertDetection(registry, write(temp, "oppo_braced_columns.log",
+                "Line 20: TX Data = { 80 12 00 00 02 }   98 4D 22 10\n" +
+                        "Line 21: RX Data = 12   98 4D 22 11\n" +
+                        "Line 22: TX Data = { CA FE }   98 4D 22 12\n"),
+                "oppo_txdata",
+                "8012000002CAFE");
+
         assertDetection(registry, write(temp, "oh.log",
                 "AA BB FF FF 00 00 00 01 00 02 80 7C 01 02 19\n"),
                 "oh_bytes",

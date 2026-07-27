@@ -1,0 +1,23 @@
+{
+  "parserId": "ix_usim_apdu_extractor_oh",
+  "name": "Ix USIM APDU Extractor OH",
+  "version": "1.0.0",
+  "pluginApiVersion": 1,
+  "implementationClass": "LegacyWrapper_ix_usim_apdu_extractor_oh",
+  "sourceType": "LEGACY_JAVA_EXTRACTOR",
+  "builtIn": false,
+  "enabled": true,
+  "validationStatus": "COMPATIBLE",
+  "validationMessage": "Compatible",
+  "preservedSourceFile": "",
+  "originalSourcePath": "Bundled with APDU Parser",
+  "compileLogPath": "",
+  "legacyMainClass": "Ix_USIM_apdu_extractor_OH",
+  "legacyCommandPattern": "INPUT_FILE_OUTPUT_FILE",
+  "legacyOutputFileName": "apdus.txt",
+  "lastCompilationStatus": "SUCCESS",
+  "lastCompilationMessage": "Bundled plugin compiled successfully.",
+  "lastTestStatus": "SUCCESS",
+  "lastTestMessage": "Bundled legacy extractor validated.",
+  "supportedExtensions": [".txt", ".log"]
+}
