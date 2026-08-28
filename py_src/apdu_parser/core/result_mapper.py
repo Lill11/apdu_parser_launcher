@@ -5,6 +5,7 @@ from pathlib import Path
 
 from apdu_parser.core.models import (
     AnalysisEvent,
+    ApduStep,
     AppletFile,
     AppletPayload,
     ApduRow,
@@ -139,6 +140,16 @@ def map_result_payload(payload: dict) -> ParseResult:
         for item in payload.get("errors", [])
     ]
 
+    apdu_steps = [
+        ApduStep(
+            command=str(item.get("command", "")),
+            expected_status_words=[str(value) for value in item.get("expectedStatusWords", [])],
+            expected_status_expression=str(item.get("expectedStatusExpression", "")),
+            source_line=int(item.get("sourceLine", 0)),
+        )
+        for item in payload.get("apduSteps", [])
+    ]
+
     return ParseResult(
         schema_version=int(payload["schemaVersion"]),
         parser_version=str(payload.get("parserVersion", "")),
@@ -174,6 +185,10 @@ def map_result_payload(payload: dict) -> ParseResult:
             errors_text=Path(str(output_files["errorsText"])) if output_files.get("errorsText") else None,
             legacy_result_json=Path(str(output_files["legacyResultJson"])) if output_files.get("legacyResultJson") else None,
             stderr_log=str(output_files.get("stderrLog", "")),
+            java_text=Path(str(output_files["javaText"])) if output_files.get("javaText") else None,
         ),
         raw=payload,
+        apdu_steps=apdu_steps,
+        generated_java=str(payload.get("generatedJava", "")),
+        generated_java_class_name=str(payload.get("generatedJavaClassName", "")),
     )

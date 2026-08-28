@@ -61,6 +61,8 @@ public final class ApduParserProcessor {
 
             LogParser.ParseResult parseResult = detection.parser().parse(inputFile);
             List<String> rawApdus = parseResult.apdus();
+            List<ApduStep> apduSteps = parseResult.apduSteps();
+            String javaSnippet = ApduJavaGenerator.generate(inputFile.getFileName().toString(), apduSteps);
             List<ApduOutputAnalyzer.AnalysisItem> analysisItems = ApduOutputAnalyzer.analyzeEntries(
                     inputFile,
                     rawApdus,
@@ -73,6 +75,8 @@ public final class ApduParserProcessor {
                     inputFile,
                     detection,
                     rawApdus,
+                    apduSteps,
+                    javaSnippet,
                     parseResult.warnings(),
                     analysisItems,
                     analysisText,
@@ -99,6 +103,10 @@ public final class ApduParserProcessor {
         }
         if (!result.analysisText().isBlank()) {
             Files.writeString(result.analysisOutputPath(artifactsDir), result.analysisText(), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        }
+        if (!result.javaSnippet().isBlank()) {
+            Files.writeString(result.javaOutputPath(artifactsDir), result.javaSnippet(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         }
         if (!result.errorText().isBlank()) {
@@ -157,6 +165,8 @@ public final class ApduParserProcessor {
             String parserId,
             String detectedFormat,
             List<String> rawApdus,
+            List<ApduStep> apduSteps,
+            String javaSnippet,
             List<String> warnings,
             List<ApduOutputAnalyzer.AnalysisItem> analysisItems,
             String analysisText,
@@ -168,6 +178,8 @@ public final class ApduParserProcessor {
                 Path inputFile,
                 LogParserRegistry.DetectionResult detection,
                 List<String> rawApdus,
+                List<ApduStep> apduSteps,
+                String javaSnippet,
                 List<String> warnings,
                 List<ApduOutputAnalyzer.AnalysisItem> analysisItems,
                 String analysisText,
@@ -182,6 +194,8 @@ public final class ApduParserProcessor {
                     detection.parserId(),
                     detection.displayName(),
                     List.copyOf(rawApdus),
+                    List.copyOf(apduSteps),
+                    javaSnippet == null ? "" : javaSnippet,
                     List.copyOf(warnings),
                     List.copyOf(analysisItems),
                     analysisText == null ? "" : analysisText,
@@ -202,6 +216,8 @@ public final class ApduParserProcessor {
                     detection.displayName(),
                     List.of(),
                     List.of(),
+                    "",
+                    List.of(),
                     List.of(),
                     "",
                     AppletExtractor.ExtractionResult.notApplicable("Detect-only mode."),
@@ -220,6 +236,8 @@ public final class ApduParserProcessor {
                     "",
                     detection.displayName(),
                     List.of(),
+                    List.of(),
+                    "",
                     List.of(),
                     List.of(),
                     "",
@@ -240,6 +258,8 @@ public final class ApduParserProcessor {
                     "Unsupported",
                     List.of(),
                     List.of(),
+                    "",
+                    List.of(),
                     List.of(),
                     "",
                     AppletExtractor.ExtractionResult.notApplicable(message),
@@ -258,6 +278,8 @@ public final class ApduParserProcessor {
                     "",
                     "Unsupported",
                     List.of(),
+                    List.of(),
+                    "",
                     List.of(),
                     List.of(),
                     "",
@@ -278,6 +300,8 @@ public final class ApduParserProcessor {
                     detection == null ? "" : detection.parserId(),
                     detection == null ? "Unsupported" : detection.displayName(),
                     List.of(),
+                    List.of(),
+                    "",
                     List.of(),
                     List.of(),
                     "",
@@ -319,6 +343,17 @@ public final class ApduParserProcessor {
 
         Path analysisOutputPath(Path artifactsDir) {
             return artifactsDir.resolve("analysis.txt");
+        }
+
+        Path javaOutputPath(Path artifactsDir) {
+            String sourceName = inputFile == null ? "" : inputFile.getFileName().toString();
+            return artifactsDir.resolve(ApduJavaGenerator.classNameFor(sourceName) + ".java");
+        }
+
+        String generatedJavaClassName() {
+            return javaSnippet.isBlank()
+                    ? ""
+                    : ApduJavaGenerator.classNameFor(inputFile == null ? "" : inputFile.getFileName().toString());
         }
 
         Path errorsOutputPath(Path artifactsDir) {
@@ -448,6 +483,28 @@ public final class ApduParserProcessor {
         }
         sb.append("  ],\n");
 
+        sb.append("  \"apduSteps\": [\n");
+        for (int i = 0; i < result.apduSteps().size(); i++) {
+            ApduStep step = result.apduSteps().get(i);
+            sb.append("    {\n");
+            appendJsonField(sb, "command", step.command(), true, 6);
+            appendJsonField(sb, "expectedStatusExpression", step.expectedStatusExpression(), true, 6);
+            appendJsonNumberField(sb, "sourceLine", step.sourceLine(), true, 6);
+            sb.append("      \"expectedStatusWords\": [");
+            for (int j = 0; j < step.expectedStatusWords().size(); j++) {
+                if (j > 0) {
+                    sb.append(", ");
+                }
+                sb.append("\"").append(escapeJson(step.expectedStatusWords().get(j))).append("\"");
+            }
+            sb.append("]\n");
+            sb.append(i == result.apduSteps().size() - 1 ? "    }\n" : "    },\n");
+        }
+        sb.append("  ],\n");
+
+        appendJsonField(sb, "generatedJava", result.javaSnippet(), true);
+        appendJsonField(sb, "generatedJavaClassName", result.generatedJavaClassName(), true);
+
         sb.append("  \"events\": [\n");
         for (int i = 0; i < result.analysisItems().size(); i++) {
             ApduOutputAnalyzer.AnalysisItem item = result.analysisItems().get(i);
@@ -567,6 +624,8 @@ public final class ApduParserProcessor {
         appendJsonField(sb, "artifactsDir", artifactsDir == null ? "" : artifactsDir.toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "apduText", artifactsDir == null ? "" : result.rawOutputPath(artifactsDir).toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "analysisText", artifactsDir == null ? "" : result.analysisOutputPath(artifactsDir).toAbsolutePath().toString(), true, 4);
+        appendJsonField(sb, "javaText", artifactsDir == null || result.javaSnippet().isBlank()
+                ? "" : result.javaOutputPath(artifactsDir).toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "errorsText", artifactsDir == null ? "" : result.errorsOutputPath(artifactsDir).toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "legacyResultJson", artifactsDir == null ? "" : result.legacyResultJsonPath(artifactsDir).toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "stderrLog", stderrText == null ? "" : stderrText, false, 4);

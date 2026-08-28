@@ -40,6 +40,7 @@ class OutputFiles:
     errors_text: Path | None
     legacy_result_json: Path | None
     stderr_log: str = ""
+    java_text: Path | None = None
 
 
 @dataclass(slots=True)
@@ -132,6 +133,14 @@ class ParserSummary:
 
 
 @dataclass(slots=True)
+class ApduStep:
+    command: str
+    expected_status_words: list[str] = field(default_factory=list)
+    expected_status_expression: str = ""
+    source_line: int = 0
+
+
+@dataclass(slots=True)
 class ParseResult:
     schema_version: int
     parser_version: str
@@ -151,6 +160,9 @@ class ParseResult:
     errors: list[ErrorPayload]
     output_files: OutputFiles
     raw: dict[str, Any]
+    apdu_steps: list[ApduStep] = field(default_factory=list)
+    generated_java: str = ""
+    generated_java_class_name: str = ""
 
 
 @dataclass(slots=True)

@@ -799,9 +799,16 @@ final class InternalLogParsers {
     }
 
     private static final class HtmlApduParser extends BaseParser {
-        private static final Pattern EVENT_PATTERN = Pattern.compile(
+        private static final Pattern TABLE_PATTERN = Pattern.compile("(?is)<TABLE\\b.*?</TABLE>");
+        private static final Pattern TD_PATTERN = Pattern.compile("(?is)<TD\\b[^>]*>(.*?)</TD>");
+        private static final Pattern TAG_PATTERN = Pattern.compile("(?is)<[^>]+>");
+        private static final Pattern APDU_PATTERN = Pattern.compile(
                 "(?i)APDU:\\s*(Reset\\b|[0-9A-F]{2}(?:[0-9A-F\\s]*[0-9A-F])?)"
-                        + "|ATR:\\s*(3B[0-9A-F]{14,})"
+        );
+        private static final Pattern ATR_PATTERN = Pattern.compile("(?i)ATR:\\s*(3B[0-9A-F]{14,})");
+        private static final Pattern FLAT_EVENT_PATTERN = Pattern.compile(
+                "(?i)APDU:\\s*(?:Reset\\b|[0-9A-F]{2}(?:[0-9A-F\\s]*[0-9A-F])?)"
+                        + "|ATR:\\s*3B[0-9A-F]{14,}"
         );
 
         private HtmlApduParser() {
@@ -818,15 +825,33 @@ final class InternalLogParsers {
         public ParseResult parse(Path inputFile) throws IOException {
             Charset charset = Charset.forName("GB2312");
             String html = Files.readString(inputFile, charset);
-            Matcher matcher = EVENT_PATTERN.matcher(html);
             List<String> apdus = new ArrayList<>();
             List<ParsedLogEvent> events = new ArrayList<>();
+            List<ApduStep> steps = new ArrayList<>();
             int pendingResetOffset = -1;
-            while (matcher.find()) {
-                String apduOrReset = matcher.group(1);
-                String atr = matcher.group(2);
+            int currentStep = -1;
+            boolean awaitingExpectedStatus = false;
+            int expectedStatusIndent = -1;
+
+            List<HtmlRecord> records = extractRecords(html);
+            boolean hasStructuredEvents = records.stream().anyMatch(record ->
+                    APDU_PATTERN.matcher(record.text()).find() || ATR_PATTERN.matcher(record.text()).find());
+            if (!hasStructuredEvents) {
+                records.clear();
+                Matcher flatEvents = FLAT_EVENT_PATTERN.matcher(html);
+                while (flatEvents.find()) {
+                    records.add(new HtmlRecord(flatEvents.start(), 0, flatEvents.group()));
+                }
+            }
+            for (HtmlRecord record : records) {
+                Matcher apduMatcher = APDU_PATTERN.matcher(record.text());
+                Matcher atrMatcher = ATR_PATTERN.matcher(record.text());
+                String apduOrReset = apduMatcher.find() ? apduMatcher.group(1) : null;
+                String atr = atrMatcher.find() ? atrMatcher.group(1) : null;
                 if (apduOrReset != null && apduOrReset.equalsIgnoreCase("Reset")) {
-                    pendingResetOffset = matcher.start();
+                    pendingResetOffset = record.offset();
+                    currentStep = -1;
+                    awaitingExpectedStatus = false;
                     continue;
                 }
                 if (atr != null && pendingResetOffset >= 0) {
@@ -846,11 +871,126 @@ final class InternalLogParsers {
                     String apdu = apduOrReset.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
                     if (!apdu.isBlank()) {
                         apdus.add(apdu);
-                        events.add(new ParsedLogEvent.Apdu(apdu, lineNumberAt(html, matcher.start())));
+                        int sourceLine = lineNumberAt(html, record.offset());
+                        events.add(new ParsedLogEvent.Apdu(apdu, sourceLine));
+                        steps.add(new ApduStep(apdu, List.of(), "", sourceLine));
+                        currentStep = steps.size() - 1;
+                        awaitingExpectedStatus = false;
                     }
+                    continue;
+                }
+
+                if (currentStep < 0) {
+                    continue;
+                }
+                String text = record.text().trim();
+                if (text.startsWith("\u671F\u671B\u72B6\u6001\u503C:")) {
+                    String expression = text.substring(text.indexOf(':') + 1).trim();
+                    List<String> values = normalizeExpectedStatusValues(expression);
+                    if (!values.isEmpty()) {
+                        steps.set(currentStep, withExpectedStatus(steps.get(currentStep), values, expression));
+                    }
+                    continue;
+                }
+                if (text.startsWith("\u671F\u671B\u72B6\u6001\u5B57:")) {
+                    awaitingExpectedStatus = true;
+                    expectedStatusIndent = record.indent();
+                    continue;
+                }
+                if (awaitingExpectedStatus && text.startsWith("\u671F\u671B\u503C:") && record.indent() > expectedStatusIndent) {
+                    String expression = text.substring(text.indexOf(':') + 1).trim();
+                    List<String> values = normalizeExpectedStatusValues(expression);
+                    if (!values.isEmpty()) {
+                        steps.set(currentStep, withExpectedStatus(steps.get(currentStep), values, expression));
+                    }
+                    awaitingExpectedStatus = false;
+                    continue;
+                }
+                if (awaitingExpectedStatus && record.indent() <= expectedStatusIndent) {
+                    awaitingExpectedStatus = false;
                 }
             }
-            return new ParseResult(apdus, List.of(), events);
+            return new ParseResult(apdus, List.of(), events, steps);
+        }
+
+        private static List<HtmlRecord> extractRecords(String html) {
+            List<HtmlRecord> records = new ArrayList<>();
+            Matcher tables = TABLE_PATTERN.matcher(html);
+            while (tables.find()) {
+                Matcher cells = TD_PATTERN.matcher(tables.group());
+                int indent = 0;
+                String text = "";
+                boolean firstCell = true;
+                while (cells.find()) {
+                    String cell = cells.group(1);
+                    if (firstCell) {
+                        indent = countOccurrences(cell.toLowerCase(Locale.ROOT), "&nbsp;");
+                        firstCell = false;
+                    }
+                    String candidate = decodeHtmlText(cell);
+                    if (!candidate.isBlank()) {
+                        text = candidate;
+                    }
+                }
+                if (!text.isBlank()) {
+                    records.add(new HtmlRecord(tables.start(), indent, text));
+                }
+            }
+            return records;
+        }
+
+        private static String decodeHtmlText(String value) {
+            String text = TAG_PATTERN.matcher(value).replaceAll(" ");
+            text = text.replace("&nbsp;", " ")
+                    .replace("&NBSP;", " ")
+                    .replace("&amp;", "&")
+                    .replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .replace("&quot;", "\"");
+            return text.replaceAll("\\s+", " ").trim();
+        }
+
+        private static int countOccurrences(String value, String needle) {
+            int count = 0;
+            int offset = 0;
+            while ((offset = value.indexOf(needle, offset)) >= 0) {
+                count++;
+                offset += needle.length();
+            }
+            return count;
+        }
+
+        private static ApduStep withExpectedStatus(ApduStep step, List<String> values, String expression) {
+            return new ApduStep(
+                    step.command(),
+                    values,
+                    normalizeExpectedExpression(expression),
+                    step.sourceLine()
+            );
+        }
+
+        private static List<String> normalizeExpectedStatusValues(String expression) {
+            String normalized = normalizeExpectedExpression(expression);
+            if (normalized.isBlank() || normalized.equals("\u65E0") || normalized.equalsIgnoreCase("NONE")) {
+                return List.of();
+            }
+            String[] alternatives = normalized.split("[/|,，;；]");
+            List<String> values = new ArrayList<>();
+            for (String alternative : alternatives) {
+                String value = alternative.trim();
+                if (!value.matches("[0-9A-FX?]{4}")) {
+                    return List.of(normalized);
+                }
+                values.add(value);
+            }
+            return List.copyOf(values);
+        }
+
+        private static String normalizeExpectedExpression(String expression) {
+            return expression == null ? "" : expression.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
+        }
+
+        private record HtmlRecord(int offset, int indent, String text) {
         }
     }
 

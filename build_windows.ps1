@@ -445,7 +445,7 @@ Invoke-External -FilePath $Python -Arguments @("-m", "pytest", "--basetemp", $Py
 
 Write-Step "Compiling Java parser and desktop sources"
 $JavaSources = Get-ChildItem -Path (Join-Path $ProjectRoot "src") -Filter *.java -Recurse | ForEach-Object FullName
-Invoke-External -FilePath $Javac -Arguments (@("-d", (Join-Path $ParserBuildRoot "classes")) + $JavaSources)
+Invoke-External -FilePath $Javac -Arguments (@("-encoding", "UTF-8", "-d", (Join-Path $ParserBuildRoot "classes")) + $JavaSources)
 
 Write-Step "Building plugin API JAR"
 New-Item -ItemType Directory -Path (Split-Path -Parent $PluginApiJar) -Force | Out-Null
@@ -473,6 +473,7 @@ $JavaTestEnvironment = @{
 }
 foreach ($testClass in @(
     "InternalParsersSelfTest",
+    "ChinaUnicomJavaExportSelfTest",
     "ApduAnalysisSelfTest",
     "ImportedLogsSelfTest",
     "RegisterLogTypeSelfTest",

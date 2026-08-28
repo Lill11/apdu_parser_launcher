@@ -27,7 +27,7 @@ if defined APDU_PARSER_JAR (
 
 echo Compiling parser sources...
 dir /s /b src\*.java > "%SOURCES_FILE%"
-"%JAVAC_CMD%" -d "%BUILD_ROOT%\classes" @"%SOURCES_FILE%"
+"%JAVAC_CMD%" -encoding UTF-8 -d "%BUILD_ROOT%\classes" @"%SOURCES_FILE%"
 if errorlevel 1 exit /b 1
 
 echo Creating parser jar...

@@ -31,6 +31,8 @@ The Java parser CLI writes one machine-readable JSON document per invocation.
     "exitCode": 0
   },
   "apdus": [],
+  "apduSteps": [],
+  "generatedJava": "",
   "events": [],
   "analysis": [],
   "applets": {},
@@ -224,9 +226,25 @@ Each error entry contains:
 - `artifactsDir`
 - `apduText`
 - `analysisText`
+- `javaText`
 - `errorsText`
 - `legacyResultJson`
 - `stderrLog`
+
+### `apduSteps`
+
+China Unicom HTML reports expose ordered APDU test steps:
+
+```json
+{
+  "command": "8010000000",
+  "expectedStatusExpression": "9000/91XX",
+  "sourceLine": 1,
+  "expectedStatusWords": ["9000", "91XX"]
+}
+```
+
+`expectedStatusWords` is empty when the report does not define an Expected SW for that APDU. The parser never substitutes the card's actual status word. `generatedJava` contains a complete `javaTest` class with one initial `test.reset()` and ordered APDU/check statements split into methods of at most 50 APDUs. Missing expectations produce a TODO comment. `generatedJavaClassName` contains the sanitized class name derived from the source filename. When generated output is written to an artifacts directory, `outputFiles.javaText` points to `<generatedJavaClassName>.java`.
 
 ## Example success JSON
 
