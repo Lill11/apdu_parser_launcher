@@ -30,7 +30,7 @@ public class ApduAnalysisSelfTest {
         List<ApduOutputAnalyzer.AnalysisItem> items = ApduOutputAnalyzer.analyzeEntries(originalLog, rawOutput);
         String rendered = ApduOutputAnalyzer.renderEnhancedOutput(items, ApduOutputAnalyzer.FilterMode.ALL);
 
-        SelfTestSupport.assertTrue(rendered.contains("#RESET LSE"), "Reset marker should be rendered.");
+        SelfTestSupport.assertTrue(!rendered.contains("RESET"), "Generic reset text must not infer a physical Cold Reset.");
         SelfTestSupport.assertTrue(rendered.contains("ES10 / DisableProfile"), "ES10 BF32 should be recognized.");
         SelfTestSupport.assertTrue(rendered.contains("FETCH"), "FETCH command should be recognized.");
         SelfTestSupport.assertTrue(rendered.contains("Configure LSI"), "Configure LSI should be recognized.");

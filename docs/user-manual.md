@@ -134,7 +134,40 @@ Use this tab when:
 - a parser failed
 - Java source plugin compilation failed
 
+### Cold Reset markers
+
+When a supported log contains parser-specific evidence of a physical card
+reset, the result timeline and exported `apdus.txt` contain a standalone:
+
+```text
+RESET
+```
+
+`RESET LSE` / `RESET LSI` commands, `REFRESH_[RESET]`, warm-reset debug text,
+and ATR-looking bytes inside APDU responses are not converted into Cold Reset
+events.
+
+Legacy Java extractors can preserve a physical reset by writing an exact
+standalone `RESET` line between their APDU lines:
+
+```text
+RESET
+00A4040000
+80E2910003BF2E00
+RESET
+00A40000023F00
+```
+
 ## 7. Filters
+
+### Generate Java from a China Unicom HTML report
+
+1. Import the China Unicom `.html` or `.htm` report and click **Analyze**.
+2. Select the completed report and open the **APDUs** tab.
+3. Click **Generate Java**.
+4. Use **Copy** or **Export Java** in the preview dialog.
+
+The generated file is a complete Java test class in package `javaTest`. It calls `test.reset()` once, preserves APDU order, and splits long reports into methods containing at most 50 APDUs. The class and `.java` filename are derived from the HTML filename. If the source HTML does not define an Expected SW for a command, the output contains `// TODO: Expected SW not found in source HTML`. The application does not assume `9000` or reuse the actual card response.
 
 The filter chips above the result tabs help reduce noise.
 

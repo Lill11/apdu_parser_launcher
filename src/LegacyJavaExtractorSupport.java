@@ -65,10 +65,11 @@ public final class LegacyJavaExtractorSupport {
             }
             return PluginDetectionResult.noMatch(reason.strip());
         }
-        if (result.apdus().isEmpty()) {
+        if (result.apdus().stream().noneMatch(value -> !"RESET".equals(value))) {
             return PluginDetectionResult.noMatch("Legacy extractor produced no APDUs.");
         }
-        return PluginDetectionResult.matched(88, "Legacy extractor produced " + result.apdus().size() + " APDUs.");
+        long apduCount = result.apdus().stream().filter(value -> !"RESET".equals(value)).count();
+        return PluginDetectionResult.matched(88, "Legacy extractor produced " + apduCount + " APDUs.");
     }
 
     public static PluginParseResult parse(
@@ -86,7 +87,7 @@ public final class LegacyJavaExtractorSupport {
             }
             throw new IOException(message.toString().strip());
         }
-        if (result.apdus().isEmpty()) {
+        if (result.apdus().stream().noneMatch(value -> !"RESET".equals(value))) {
             throw new IOException("Legacy extractor completed but produced no parseable APDUs.");
         }
         return new PluginParseResult(result.apdus(), result.warnings());
@@ -273,12 +274,16 @@ public final class LegacyJavaExtractorSupport {
         return persisted;
     }
 
-    private static ParsedLegacyOutput parseOutputFile(Path outputFile) throws IOException {
+    static ParsedLegacyOutput parseOutputFile(Path outputFile) throws IOException {
         List<String> lines = Files.readAllLines(outputFile, StandardCharsets.UTF_8);
         List<String> apdus = new ArrayList<>();
         Set<String> warnings = new LinkedHashSet<>();
         for (String line : lines) {
             if (line == null || line.isBlank()) {
+                continue;
+            }
+            if ("RESET".equals(line.strip())) {
+                apdus.add("RESET");
                 continue;
             }
             String extracted = extractTxApdu(line);
@@ -406,6 +411,6 @@ public final class LegacyJavaExtractorSupport {
         return lineBreak >= 0 ? value.substring(0, lineBreak).trim() : value.trim();
     }
 
-    private record ParsedLegacyOutput(List<String> apdus, List<String> warnings) {
+    record ParsedLegacyOutput(List<String> apdus, List<String> warnings) {
     }
 }

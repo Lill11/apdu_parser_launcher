@@ -61,7 +61,13 @@ public final class ApduParserProcessor {
 
             LogParser.ParseResult parseResult = detection.parser().parse(inputFile);
             List<String> rawApdus = parseResult.apdus();
-            List<ApduOutputAnalyzer.AnalysisItem> analysisItems = ApduOutputAnalyzer.analyzeEntries(inputFile, rawApdus);
+            List<ApduStep> apduSteps = parseResult.apduSteps();
+            String javaSnippet = ApduJavaGenerator.generate(inputFile.getFileName().toString(), apduSteps);
+            List<ApduOutputAnalyzer.AnalysisItem> analysisItems = ApduOutputAnalyzer.analyzeEntries(
+                    inputFile,
+                    rawApdus,
+                    parseResult.events()
+            );
             String analysisText = ApduOutputAnalyzer.renderEnhancedOutput(analysisItems, ApduOutputAnalyzer.FilterMode.ALL);
             AppletExtractor.ExtractionResult appletResult = AppletExtractor.extract(rawApdus);
 
@@ -69,6 +75,8 @@ public final class ApduParserProcessor {
                     inputFile,
                     detection,
                     rawApdus,
+                    apduSteps,
+                    javaSnippet,
                     parseResult.warnings(),
                     analysisItems,
                     analysisText,
@@ -89,12 +97,16 @@ public final class ApduParserProcessor {
         Files.createDirectories(artifactsDir);
         cleanupResultFolder(artifactsDir);
 
-        if (!result.rawApdus().isEmpty()) {
-            Files.write(result.rawOutputPath(artifactsDir), result.rawApdus(), StandardCharsets.UTF_8,
+        if (!result.analysisItems().isEmpty()) {
+            Files.write(result.rawOutputPath(artifactsDir), result.normalizedOutputLines(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         }
         if (!result.analysisText().isBlank()) {
             Files.writeString(result.analysisOutputPath(artifactsDir), result.analysisText(), StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        }
+        if (!result.javaSnippet().isBlank()) {
+            Files.writeString(result.javaOutputPath(artifactsDir), result.javaSnippet(), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         }
         if (!result.errorText().isBlank()) {
@@ -153,6 +165,8 @@ public final class ApduParserProcessor {
             String parserId,
             String detectedFormat,
             List<String> rawApdus,
+            List<ApduStep> apduSteps,
+            String javaSnippet,
             List<String> warnings,
             List<ApduOutputAnalyzer.AnalysisItem> analysisItems,
             String analysisText,
@@ -164,6 +178,8 @@ public final class ApduParserProcessor {
                 Path inputFile,
                 LogParserRegistry.DetectionResult detection,
                 List<String> rawApdus,
+                List<ApduStep> apduSteps,
+                String javaSnippet,
                 List<String> warnings,
                 List<ApduOutputAnalyzer.AnalysisItem> analysisItems,
                 String analysisText,
@@ -178,6 +194,8 @@ public final class ApduParserProcessor {
                     detection.parserId(),
                     detection.displayName(),
                     List.copyOf(rawApdus),
+                    List.copyOf(apduSteps),
+                    javaSnippet == null ? "" : javaSnippet,
                     List.copyOf(warnings),
                     List.copyOf(analysisItems),
                     analysisText == null ? "" : analysisText,
@@ -198,6 +216,8 @@ public final class ApduParserProcessor {
                     detection.displayName(),
                     List.of(),
                     List.of(),
+                    "",
+                    List.of(),
                     List.of(),
                     "",
                     AppletExtractor.ExtractionResult.notApplicable("Detect-only mode."),
@@ -216,6 +236,8 @@ public final class ApduParserProcessor {
                     "",
                     detection.displayName(),
                     List.of(),
+                    List.of(),
+                    "",
                     List.of(),
                     List.of(),
                     "",
@@ -236,6 +258,8 @@ public final class ApduParserProcessor {
                     "Unsupported",
                     List.of(),
                     List.of(),
+                    "",
+                    List.of(),
                     List.of(),
                     "",
                     AppletExtractor.ExtractionResult.notApplicable(message),
@@ -254,6 +278,8 @@ public final class ApduParserProcessor {
                     "",
                     "Unsupported",
                     List.of(),
+                    List.of(),
+                    "",
                     List.of(),
                     List.of(),
                     "",
@@ -274,6 +300,8 @@ public final class ApduParserProcessor {
                     detection == null ? "" : detection.parserId(),
                     detection == null ? "Unsupported" : detection.displayName(),
                     List.of(),
+                    List.of(),
+                    "",
                     List.of(),
                     List.of(),
                     "",
@@ -301,12 +329,31 @@ public final class ApduParserProcessor {
             return appletResult.applets().size();
         }
 
+        List<String> normalizedOutputLines() {
+            List<String> lines = new ArrayList<>();
+            for (ApduOutputAnalyzer.AnalysisItem item : analysisItems) {
+                lines.add(item.isResetMarker() ? "RESET" : item.commandApdu);
+            }
+            return List.copyOf(lines);
+        }
+
         Path rawOutputPath(Path artifactsDir) {
             return artifactsDir.resolve("apdus.txt");
         }
 
         Path analysisOutputPath(Path artifactsDir) {
             return artifactsDir.resolve("analysis.txt");
+        }
+
+        Path javaOutputPath(Path artifactsDir) {
+            String sourceName = inputFile == null ? "" : inputFile.getFileName().toString();
+            return artifactsDir.resolve(ApduJavaGenerator.classNameFor(sourceName) + ".java");
+        }
+
+        String generatedJavaClassName() {
+            return javaSnippet.isBlank()
+                    ? ""
+                    : ApduJavaGenerator.classNameFor(inputFile == null ? "" : inputFile.getFileName().toString());
         }
 
         Path errorsOutputPath(Path artifactsDir) {
@@ -404,6 +451,7 @@ public final class ApduParserProcessor {
             ApduOutputAnalyzer.AnalysisItem item = commandItems.get(i);
             sb.append("    {\n");
             appendJsonNumberField(sb, "index", item.sequenceIndex, true, 6);
+            appendJsonNumberField(sb, "eventSequence", item.eventSequence, true, 6);
             appendJsonField(sb, "command", item.commandApdu, true, 6);
             appendJsonField(sb, "response", item.responseApdu, true, 6);
             appendJsonField(sb, "commandName", item.commandName, true, 6);
@@ -435,17 +483,87 @@ public final class ApduParserProcessor {
         }
         sb.append("  ],\n");
 
+        sb.append("  \"apduSteps\": [\n");
+        for (int i = 0; i < result.apduSteps().size(); i++) {
+            ApduStep step = result.apduSteps().get(i);
+            sb.append("    {\n");
+            appendJsonField(sb, "command", step.command(), true, 6);
+            appendJsonField(sb, "expectedStatusExpression", step.expectedStatusExpression(), true, 6);
+            appendJsonNumberField(sb, "sourceLine", step.sourceLine(), true, 6);
+            sb.append("      \"expectedStatusWords\": [");
+            for (int j = 0; j < step.expectedStatusWords().size(); j++) {
+                if (j > 0) {
+                    sb.append(", ");
+                }
+                sb.append("\"").append(escapeJson(step.expectedStatusWords().get(j))).append("\"");
+            }
+            sb.append("]\n");
+            sb.append(i == result.apduSteps().size() - 1 ? "    }\n" : "    },\n");
+        }
+        sb.append("  ],\n");
+
+        appendJsonField(sb, "generatedJava", result.javaSnippet(), true);
+        appendJsonField(sb, "generatedJavaClassName", result.generatedJavaClassName(), true);
+
+        sb.append("  \"events\": [\n");
+        for (int i = 0; i < result.analysisItems().size(); i++) {
+            ApduOutputAnalyzer.AnalysisItem item = result.analysisItems().get(i);
+            sb.append("    {\n");
+            appendJsonNumberField(sb, "sequence", item.eventSequence, true, 6);
+            appendJsonField(sb, "type", item.isResetMarker() ? "RESET" : "APDU", true, 6);
+            if (item.isResetMarker()) {
+                appendJsonField(sb, "resetType", item.resetType, true, 6);
+                appendJsonField(sb, "label", "RESET", true, 6);
+                appendJsonField(sb, "atr", item.atr, true, 6);
+                appendJsonNumberField(sb, "sourceLine", item.sourceLine, false, 6);
+            } else {
+                appendJsonNumberField(sb, "apduIndex", item.sequenceIndex, true, 6);
+                appendJsonField(sb, "command", item.commandApdu, true, 6);
+                appendJsonField(sb, "response", item.responseApdu, true, 6);
+                appendJsonField(sb, "commandName", item.commandName, true, 6);
+                appendJsonField(sb, "headline", item.headline, true, 6);
+                appendJsonField(sb, "statusWord", item.statusWord, true, 6);
+                appendJsonField(sb, "severity", item.severity, true, 6);
+                appendJsonField(sb, "tag", item.tagLabel, true, 6);
+                sb.append("      \"filters\": [");
+                List<String> filters = new ArrayList<>();
+                if (item.es10) {
+                    filters.add("ES10");
+                }
+                if (item.fetchOrTerminalResponse) {
+                    filters.add("FETCH/TR");
+                }
+                if (item.isConfigureLsi() || "Manage LSI".equals(item.commandName)) {
+                    filters.add("LSI");
+                }
+                for (int f = 0; f < filters.size(); f++) {
+                    if (f > 0) {
+                        sb.append(", ");
+                    }
+                    sb.append("\"").append(escapeJson(filters.get(f))).append("\"");
+                }
+                sb.append("],\n");
+                appendJsonField(sb, "note", item.note, true, 6);
+                appendJsonNumberField(sb, "sourceLine", item.sourceLine, false, 6);
+            }
+            sb.append(i == result.analysisItems().size() - 1 ? "    }\n" : "    },\n");
+        }
+        sb.append("  ],\n");
+
         sb.append("  \"analysis\": [\n");
         for (int i = 0; i < result.analysisItems().size(); i++) {
             ApduOutputAnalyzer.AnalysisItem item = result.analysisItems().get(i);
             sb.append("    {\n");
             appendJsonNumberField(sb, "index", item.sequenceIndex, true, 6);
+            appendJsonNumberField(sb, "eventSequence", item.eventSequence, true, 6);
             appendJsonField(sb, "type", item.isResetMarker() ? "reset" : "apdu", true, 6);
             appendJsonField(sb, "title", item.headline, true, 6);
             appendJsonField(sb, "message", item.note, true, 6);
             appendJsonField(sb, "severity", item.severity, true, 6);
             appendJsonField(sb, "statusWord", item.statusWord, true, 6);
             appendJsonField(sb, "tag", item.tagLabel, true, 6);
+            appendJsonField(sb, "resetType", item.resetType, true, 6);
+            appendJsonField(sb, "atr", item.atr, true, 6);
             appendJsonNumberField(sb, "sourceLine", item.sourceLine, false, 6);
             sb.append(i == result.analysisItems().size() - 1 ? "    }\n" : "    },\n");
         }
@@ -506,6 +624,8 @@ public final class ApduParserProcessor {
         appendJsonField(sb, "artifactsDir", artifactsDir == null ? "" : artifactsDir.toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "apduText", artifactsDir == null ? "" : result.rawOutputPath(artifactsDir).toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "analysisText", artifactsDir == null ? "" : result.analysisOutputPath(artifactsDir).toAbsolutePath().toString(), true, 4);
+        appendJsonField(sb, "javaText", artifactsDir == null || result.javaSnippet().isBlank()
+                ? "" : result.javaOutputPath(artifactsDir).toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "errorsText", artifactsDir == null ? "" : result.errorsOutputPath(artifactsDir).toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "legacyResultJson", artifactsDir == null ? "" : result.legacyResultJsonPath(artifactsDir).toAbsolutePath().toString(), true, 4);
         appendJsonField(sb, "stderrLog", stderrText == null ? "" : stderrText, false, 4);

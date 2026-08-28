@@ -14,10 +14,25 @@ public interface LogParser {
 
     ParseResult parse(Path inputFile) throws IOException;
 
-    record ParseResult(List<String> apdus, List<String> warnings) {
+    record ParseResult(
+            List<String> apdus,
+            List<String> warnings,
+            List<ParsedLogEvent> events,
+            List<ApduStep> apduSteps
+    ) {
+        public ParseResult(List<String> apdus, List<String> warnings) {
+            this(apdus, warnings, List.of(), List.of());
+        }
+
+        public ParseResult(List<String> apdus, List<String> warnings, List<ParsedLogEvent> events) {
+            this(apdus, warnings, events, List.of());
+        }
+
         public ParseResult {
             apdus = apdus == null ? List.of() : List.copyOf(apdus);
             warnings = warnings == null ? List.of() : List.copyOf(warnings);
+            events = events == null ? List.of() : List.copyOf(events);
+            apduSteps = apduSteps == null ? List.of() : List.copyOf(apduSteps);
         }
     }
 }

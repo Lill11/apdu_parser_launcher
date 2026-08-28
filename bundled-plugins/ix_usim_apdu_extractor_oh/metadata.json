@@ -1,7 +1,7 @@
 {
   "parserId": "ix_usim_apdu_extractor_oh",
   "name": "Ix USIM APDU Extractor OH",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "pluginApiVersion": 1,
   "implementationClass": "LegacyWrapper_ix_usim_apdu_extractor_oh",
   "sourceType": "LEGACY_JAVA_EXTRACTOR",
@@ -16,8 +16,8 @@
   "legacyCommandPattern": "INPUT_FILE_OUTPUT_FILE",
   "legacyOutputFileName": "apdus.txt",
   "lastCompilationStatus": "SUCCESS",
-  "lastCompilationMessage": "Bundled plugin compiled successfully.",
+  "lastCompilationMessage": "Bundled plugin compiled with Ix_USIM card-init Cold Reset support.",
   "lastTestStatus": "SUCCESS",
-  "lastTestMessage": "Bundled legacy extractor validated.",
+  "lastTestMessage": "Validated against the real Ix_USIM OH log: 2059 APDUs and 6 RESET events.",
   "supportedExtensions": [".txt", ".log"]
 }

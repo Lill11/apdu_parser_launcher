@@ -24,10 +24,19 @@ public class Ix_USIM_apdu_extractor_OH {
     );
 
     private static final class Entry {
+        int sourceLine;
+        String timestamp;
+        String channel;
         boolean sent;
         int sci;
         int lsi;
         List<String> bytes;
+        String description;
+    }
+
+    private static final class ParsedPayload {
+        List<String> bytes;
+        String description;
     }
 
     public static void main(String[] args) {
@@ -43,9 +52,11 @@ public class Ix_USIM_apdu_extractor_OH {
 
         try {
             List<Entry> entries = readEntries(input, charset);
-            List<String> apdus = extractApdus(entries);
-            writeTxt(output, apdus);
-            System.out.println("APDU extraidas: " + apdus.size());
+            List<String> events = extractEvents(entries);
+            writeTxt(output, events);
+            int resetCount = count(events, "RESET");
+            System.out.println("APDU extraidas: " + (events.size() - resetCount));
+            System.out.println("Cold Reset extraidos: " + resetCount);
             System.out.println("Fichero generado: " + output.toAbsolutePath());
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
@@ -59,25 +70,31 @@ public class Ix_USIM_apdu_extractor_OH {
 
         try (BufferedReader reader = Files.newBufferedReader(input, charset)) {
             String line;
+            int sourceLine = 0;
             while ((line = reader.readLine()) != null) {
+                sourceLine++;
                 Matcher m = LOG_LINE.matcher(line);
                 if (!m.matches()) continue;
 
-                List<String> bytes = extractLeadingHexBytes(m.group(5));
-                if (bytes.isEmpty()) continue;
+                ParsedPayload payload = extractPayload(m.group(5));
+                if (payload.bytes.isEmpty()) continue;
 
                 Entry e = new Entry();
+                e.sourceLine = sourceLine;
+                e.timestamp = m.group(1);
+                e.channel = extractChannel(line);
                 e.sent = "---->".equals(m.group(2));
                 e.sci = Integer.parseInt(m.group(3));
                 e.lsi = Integer.parseInt(m.group(4));
-                e.bytes = bytes;
+                e.bytes = payload.bytes;
+                e.description = payload.description;
                 entries.add(e);
             }
         }
         return entries;
     }
 
-    private static List<String> extractLeadingHexBytes(String text) {
+    private static ParsedPayload extractPayload(String text) {
         List<String> bytes = new ArrayList<String>();
         Matcher m = HEX_BYTE.matcher(text);
         int previousEnd = 0;
@@ -87,14 +104,26 @@ public class Ix_USIM_apdu_extractor_OH {
             bytes.add(m.group(1).toUpperCase(Locale.ROOT));
             previousEnd = m.end();
         }
-        return bytes;
+        ParsedPayload payload = new ParsedPayload();
+        payload.bytes = bytes;
+        payload.description = text.substring(Math.min(previousEnd, text.length())).trim();
+        return payload;
     }
 
-    private static List<String> extractApdus(List<Entry> entries) {
+    private static String extractChannel(String line) {
+        Matcher channel = Pattern.compile("\\b(I\\d+_USIM)\\b").matcher(line);
+        return channel.find() ? channel.group(1) : "";
+    }
+
+    private static List<String> extractEvents(List<Entry> entries) {
         List<String> result = new ArrayList<String>();
 
         for (int i = 0; i < entries.size(); i++) {
             Entry header = entries.get(i);
+            if (isStandaloneColdReset(header)) {
+                result.add("RESET");
+                continue;
+            }
             if (!header.sent) continue;
 
             if (isFragmentedHeader(entries, i)) {
@@ -109,6 +138,15 @@ public class Ix_USIM_apdu_extractor_OH {
             }
         }
         return result;
+    }
+
+    private static boolean isStandaloneColdReset(Entry entry) {
+        return !entry.sent
+            && entry.bytes != null
+            && !entry.bytes.isEmpty()
+            && "3B".equalsIgnoreCase(entry.bytes.get(0))
+            && entry.description != null
+            && entry.description.toLowerCase(Locale.ROOT).contains("card init");
     }
 
     private static boolean isFragmentedHeader(List<Entry> entries, int index) {
@@ -135,13 +173,21 @@ public class Ix_USIM_apdu_extractor_OH {
             && data.bytes.size() >= lc;
     }
 
-    private static void writeTxt(Path output, List<String> apdus) throws IOException {
+    private static void writeTxt(Path output, List<String> events) throws IOException {
         try (BufferedWriter writer = Files.newBufferedWriter(output, StandardCharsets.UTF_8)) {
-            for (String apdu : apdus) {
-                writer.write(apdu);
+            for (String event : events) {
+                writer.write(event);
                 writer.newLine();
             }
         }
+    }
+
+    private static int count(List<String> values, String expected) {
+        int count = 0;
+        for (String value : values) {
+            if (expected.equals(value)) count++;
+        }
+        return count;
     }
 
     private static String join(List<String> bytes) {

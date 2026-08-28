@@ -31,6 +31,9 @@ The Java parser CLI writes one machine-readable JSON document per invocation.
     "exitCode": 0
   },
   "apdus": [],
+  "apduSteps": [],
+  "generatedJava": "",
+  "events": [],
   "analysis": [],
   "applets": {},
   "warnings": [],
@@ -94,6 +97,7 @@ The Java parser CLI writes one machine-readable JSON document per invocation.
 Each APDU entry contains:
 
 - `index`
+- `eventSequence`
 - `command`
 - `response`
 - `commandName`
@@ -107,11 +111,77 @@ Each APDU entry contains:
 
 `command` and `response` are uppercase hex strings.
 
+### `events[]`
+
+Optional ordered parser events. Consumers written before this field was added can
+continue reading `apdus[]`.
+
+APDU event:
+
+```json
+{
+  "sequence": 2,
+  "type": "APDU",
+  "apduIndex": 1,
+  "command": "00A4040000",
+  "response": "9000",
+  "sourceLine": 8
+}
+```
+
+Cold Reset event:
+
+```json
+{
+  "sequence": 1,
+  "type": "RESET",
+  "resetType": "COLD_RESET",
+  "label": "RESET",
+  "atr": "3B9F96803FC7838031E073F62113674B0758E0240200A1",
+  "sourceLine": 7
+}
+```
+
+`sequence` preserves event order. `apduIndex` counts only APDU commands, so a
+RESET does not change existing APDU numbering.
+
+#### Parser-specific Cold Reset rules
+
+Cold Reset detection is performed inside each parser. There is no global
+`RESET` or `3B` search.
+
+PCSC uses the confirmed standalone transport receive record:
+
+```regex
+^\s*(?:INFO\s+\S+\s+)?\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3,6}\s+<--\s+(3B(?:[0-9A-Fa-f]{2}){7,})\s*$
+```
+
+This accepts the confirmed standalone PCSC ATR receive line, with or without
+the `INFO root:lib_tmsLogger.py:36` logging prefix. It does not match `[PCSC]`
+APDU responses, expected/actual assertion text, ATR bytes embedded in APDU
+payloads, RESET LSE APDUs, or `REFRESH_[RESET]` descriptions.
+
+Other built-in formats use their own evidence:
+
+| Parser | Required reset evidence |
+| --- | --- |
+| Honor APDU_TX | A `MOD_SIM_BASELINE_UH` cold-reset/power/activation completion record followed within 12 records by a dedicated `ATR_REPORT`, `CARD_ATR`, or `SIM_ATR` record. `APDU_rx` is excluded. |
+| OPPO TXDATA | One complete `Type = ATR RX DATA` transport record. Split ATR records are assembled before the event is emitted. `MMGSDI_CARD_INSERTED_EVT` alone is ignored. |
+| OH bytes | A valid ATR in a card-to-terminal frame (`01 01`), immediately followed by a terminal-to-card Configure LSI command (`80 7C 04 00`). |
+| UNISOC USIMDRV | A same-slot `SimPowerOff`/cold-reset-start, then `SimPowerOn`/voltage activation, then a dedicated `SimGetATR`/`SimValidateATR` record. `is in warm reset:0` and `SIM_SendInstrCode active sim card` are ignored. |
+| HTML APDU report | An exact report event `APDU: Reset` followed by an independent `ATR:` report row before the next APDU. A plain APDU-only HTML table cannot recover a missing reset. |
+| Legacy Java extractor | An exact standalone output line `RESET`. The marker may be mixed with APDU lines and retains output order. |
+
+The ATR validator parses the ATR interface-byte and historical-byte structure.
+It is only applied after the parser has identified a transport-specific ATR
+record; arbitrary APDU payload bytes beginning with `3B` are never scanned.
+
 ### `analysis[]`
 
 Each analysis item contains:
 
 - `index`
+- `eventSequence`
 - `type`
   - `apdu` or `reset`
 - `title`
@@ -120,6 +190,8 @@ Each analysis item contains:
 - `statusWord`
 - `tag`
 - `sourceLine`
+- `resetType`
+- `atr`
 
 ### `applets`
 
@@ -154,18 +226,34 @@ Each error entry contains:
 - `artifactsDir`
 - `apduText`
 - `analysisText`
+- `javaText`
 - `errorsText`
 - `legacyResultJson`
 - `stderrLog`
 
+### `apduSteps`
+
+China Unicom HTML reports expose ordered APDU test steps:
+
+```json
+{
+  "command": "8010000000",
+  "expectedStatusExpression": "9000/91XX",
+  "sourceLine": 1,
+  "expectedStatusWords": ["9000", "91XX"]
+}
+```
+
+`expectedStatusWords` is empty when the report does not define an Expected SW for that APDU. The parser never substitutes the card's actual status word. `generatedJava` contains a complete `javaTest` class with one initial `test.reset()` and ordered APDU/check statements split into methods of at most 50 APDUs. Missing expectations produce a TODO comment. `generatedJavaClassName` contains the sanitized class name derived from the source filename. When generated output is written to an artifacts directory, `outputFiles.javaText` points to `<generatedJavaClassName>.java`.
+
 ## Example success JSON
 
-See [success.json](C:/Users/junli/Documents/Codex/apdu_parser_launcher/docs/examples/success.json)
+See [success.json](examples/success.json)
 
 ## Example unsupported-format JSON
 
-See [unsupported.json](C:/Users/junli/Documents/Codex/apdu_parser_launcher/docs/examples/unsupported.json)
+See [unsupported.json](examples/unsupported.json)
 
 ## Example parser-error JSON
 
-See [parser-error.json](C:/Users/junli/Documents/Codex/apdu_parser_launcher/docs/examples/parser-error.json)
+See [parser-error.json](examples/parser-error.json)

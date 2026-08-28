@@ -4,8 +4,10 @@ from pathlib import Path
 
 from apdu_parser.core.models import (
     AnalysisEvent,
+    ApduRow,
     AppletPayload,
     DetectedParser,
+    FilterMode,
     ImportedLogItem,
     LogStatus,
     OutputFiles,
@@ -13,7 +15,7 @@ from apdu_parser.core.models import (
     ParserSummary,
 )
 from apdu_parser.ui.widgets.log_table import ImportedLogsTableModel
-from apdu_parser.ui.widgets.result_tabs import ResultTabs
+from apdu_parser.ui.widgets.result_tabs import JavaSnippetDialog, ResultTabs
 
 
 def test_logs_table_model_state(qapp):
@@ -65,6 +67,7 @@ def test_result_tabs_render_completed_result(qapp):
         detected_parser=DetectedParser(parser_id="pcsc", display_name="pcsc", supported=True),
         summary=ParserSummary(apdu_count=1, analysis_event_count=1, applet_count=0, warning_count=0, exit_code=0),
         apdus=[],
+        events=[],
         analysis=[
             AnalysisEvent(
                 index=12,
@@ -90,9 +93,58 @@ def test_result_tabs_render_completed_result(qapp):
             stderr_log="",
         ),
         raw={},
+        generated_java='response = test.sendApdu("00 A4 04 00 00");\n',
     )
 
     tabs.set_result("sample.log", result)
 
     assert "DisableProfile" in tabs.analysis_browser.toPlainText()
     assert tabs.error_summary.text() == "No parser errors."
+    assert tabs.generate_java_btn.isEnabled()
+
+
+def test_result_tabs_show_reset_only_in_all_filter(qapp):
+    tabs = ResultTabs()
+    reset = ApduRow(
+        index=None,
+        command="RESET",
+        response="3B9F96803FC7838031E073F62113674B0758E0240200A1",
+        command_name="RESET",
+        headline="RESET",
+        status_word="",
+        severity="INFO",
+        tag="",
+        source_line=7,
+        event_sequence=1,
+        event_type="RESET",
+        reset_type="COLD_RESET",
+        atr="3B9F96803FC7838031E073F62113674B0758E0240200A1",
+    )
+    tabs.apdu_model.set_rows([reset])
+
+    tabs.set_filter_mode(FilterMode.ALL)
+    assert tabs.apdu_proxy.rowCount() == 1
+    tabs.search_input.setText("cold reset")
+    assert tabs.apdu_proxy.rowCount() == 1
+    tabs.search_input.clear()
+
+    for mode in (FilterMode.ES10, FilterMode.FETCH_TR, FilterMode.LSI):
+        tabs.set_filter_mode(mode)
+        assert tabs.apdu_proxy.rowCount() == 0
+
+
+def test_java_snippet_dialog_exports_only_generated_content(qapp, monkeypatch, tmp_path):
+    content = (
+        'response = test.sendApdu("00 A4 00 04 02 3F 00");\n'
+        'if (response.checkSw("9000") == false) {numErrors += 1;}\n'
+    )
+    target = tmp_path / "generated.java"
+    dialog = JavaSnippetDialog(content, "report.java")
+    monkeypatch.setattr(
+        "apdu_parser.ui.widgets.result_tabs.QFileDialog.getSaveFileName",
+        lambda *args, **kwargs: (str(target), "Java Files (*.java)"),
+    )
+
+    dialog.export_java()
+
+    assert target.read_text(encoding="utf-8") == content

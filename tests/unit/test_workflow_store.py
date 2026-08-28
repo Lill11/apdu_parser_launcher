@@ -41,6 +41,7 @@ def make_result(*, exit_code: int, success: bool, status: str, parser_name: str)
             exit_code=exit_code,
         ),
         apdus=[],
+        events=[],
         analysis=[],
         applets=AppletPayload(status="not_applicable", message="", all_clean=[], files=[]),
         warnings=[],

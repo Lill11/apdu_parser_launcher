@@ -8,8 +8,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -61,6 +63,15 @@ final class InternalLogParsers {
         private static final Pattern APDU_TX_RE =
                 Pattern.compile("\\bAPDU_tx\\s+\\d+\\s*:\\s*([0-9A-Fa-f]{2}(?:\\s+[0-9A-Fa-f]{2})*)\\s*$");
         private static final Pattern HEX_TOKEN_RE = Pattern.compile("\\b[0-9A-Fa-f]{2}\\b");
+        private static final Pattern RESET_START_RE = Pattern.compile(
+                "(?i)\\bSIM\\s+MOD_SIM_BASELINE_UH\\s+"
+                        + "(?:SIM_CARD_COLD_RESET|CARD_COLD_RESET|SIM_POWER_ON|CARD_ACTIVATION)\\s+"
+                        + "(?:START|SUCCESS|COMPLETE|COMPLETED)\\b"
+        );
+        private static final Pattern ATR_REPORT_RE = Pattern.compile(
+                "(?i)\\bSIM\\s+MOD_SIM_BASELINE_UH\\s+(?:ATR_REPORT|CARD_ATR|SIM_ATR)\\s*:?\\s*"
+                        + "(3B(?:\\s*[0-9A-F]{2}){7,})\\s*$"
+        );
 
         private HonorApduTxParser() {
             super("honor_apdutx", "Honor APDU_TX", ".txt", ".log");
@@ -75,29 +86,60 @@ final class InternalLogParsers {
         public ParseResult parse(Path inputFile) throws IOException {
             List<String> lines = Files.readAllLines(inputFile, StandardCharsets.UTF_8);
             List<String> apdusOut = new ArrayList<>();
+            List<ParsedLogEvent> events = new ArrayList<>();
             StringBuilder current = new StringBuilder();
             boolean inTxBlock = false;
+            int currentStartLine = 0;
+            int pendingResetLine = 0;
 
-            for (String line : lines) {
+            for (int index = 0; index < lines.size(); index++) {
+                String line = lines.get(index);
+                int sourceLine = index + 1;
                 Matcher matcher = APDU_TX_RE.matcher(line);
                 if (matcher.find()) {
+                    if (!inTxBlock) {
+                        currentStartLine = sourceLine;
+                    }
                     current.append(toHexNoSpaces(matcher.group(1)));
                     inTxBlock = true;
                 } else if (inTxBlock) {
-                    flushCurrent(apdusOut, current);
+                    flushCurrent(apdusOut, events, current, currentStartLine);
                     inTxBlock = false;
+                }
+
+                if (RESET_START_RE.matcher(line).find()) {
+                    pendingResetLine = sourceLine;
+                    continue;
+                }
+                Matcher atrMatcher = ATR_REPORT_RE.matcher(line);
+                if (pendingResetLine > 0 && sourceLine - pendingResetLine <= 12 && atrMatcher.find()) {
+                    String atr = atrMatcher.group(1).replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+                    if (isValidAtr(atr)) {
+                        events.add(new ParsedLogEvent.Reset(
+                                ParsedLogEvent.ResetType.COLD_RESET, atr, pendingResetLine));
+                    }
+                    pendingResetLine = 0;
+                } else if (pendingResetLine > 0 && sourceLine - pendingResetLine > 12) {
+                    pendingResetLine = 0;
                 }
             }
 
             if (inTxBlock) {
-                flushCurrent(apdusOut, current);
+                flushCurrent(apdusOut, events, current, currentStartLine);
             }
-            return new ParseResult(apdusOut, List.of());
+            return new ParseResult(apdusOut, List.of(), events);
         }
 
-        private static void flushCurrent(List<String> apdusOut, StringBuilder current) {
+        private static void flushCurrent(
+                List<String> apdusOut,
+                List<ParsedLogEvent> events,
+                StringBuilder current,
+                int sourceLine
+        ) {
             if (current.length() > 0) {
-                apdusOut.add(current.toString().toUpperCase(Locale.ROOT));
+                String apdu = current.toString().toUpperCase(Locale.ROOT);
+                apdusOut.add(apdu);
+                events.add(new ParsedLogEvent.Apdu(apdu, sourceLine));
                 current.setLength(0);
             }
         }
@@ -115,6 +157,9 @@ final class InternalLogParsers {
     private static final class OppoTxDataParser extends BaseParser {
         private static final Pattern ORIGINAL_LINE_NUMBER = Pattern.compile("(?i)\\bLine\\s+(\\d+)\\s*:");
         private static final Pattern HEX_BYTE = Pattern.compile("(?i)(?<![0-9A-F])[0-9A-F]{2}(?![0-9A-F])");
+        private static final Pattern ATR_RX_DATA = Pattern.compile(
+                "(?i)\\bType\\s*=\\s*ATR\\s+RX\\s+DATA\\s*=\\s*(?:\\{([^}]*)}|([0-9A-F]{2}))"
+        );
         private static final Set<Integer> COMMON_CLA = new HashSet<>(Arrays.asList(
                 0x00, 0x01, 0x02, 0x03,
                 0x80, 0x81, 0x82, 0x83, 0x84,
@@ -126,9 +171,9 @@ final class InternalLogParsers {
         private static final class Frame {
             final boolean tx;
             final List<String> bytes;
-            final String sourceLine;
+            final int sourceLine;
 
-            private Frame(boolean tx, List<String> bytes, String sourceLine) {
+            private Frame(boolean tx, List<String> bytes, int sourceLine) {
                 this.tx = tx;
                 this.bytes = bytes;
                 this.sourceLine = sourceLine;
@@ -148,16 +193,43 @@ final class InternalLogParsers {
         @Override
         public ParseResult parse(Path inputFile) throws IOException {
             List<String> apdusOut = new ArrayList<>();
+            List<ParsedLogEvent> events = new ArrayList<>();
             State state = State.WAIT_HEADER_TX;
             List<String> header = null;
             String ins = null;
             int p3 = 0;
             List<String> commandData = new ArrayList<>();
+            int headerSourceLine = 0;
+            List<String> atrBytes = new ArrayList<>();
+            int atrSourceLine = 0;
+            int physicalLine = 0;
 
             try (BufferedReader reader = Files.newBufferedReader(inputFile, StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    Frame frame = parseFrame(line);
+                    physicalLine++;
+                    Matcher atrMatcher = ATR_RX_DATA.matcher(line);
+                    if (atrMatcher.find()) {
+                        List<String> part = extractHexBytes(
+                                atrMatcher.group(1) != null ? atrMatcher.group(1) : atrMatcher.group(2));
+                        if (atrBytes.isEmpty()) {
+                            atrSourceLine = sourceLineOf(line, physicalLine);
+                        }
+                        atrBytes.addAll(part);
+                        String atr = joinNoSpaces(atrBytes);
+                        if (isValidAtr(atr)) {
+                            events.add(new ParsedLogEvent.Reset(
+                                    ParsedLogEvent.ResetType.COLD_RESET, atr, atrSourceLine));
+                            atrBytes.clear();
+                            atrSourceLine = 0;
+                        }
+                        continue;
+                    } else if (!atrBytes.isEmpty()) {
+                        atrBytes.clear();
+                        atrSourceLine = 0;
+                    }
+
+                    Frame frame = parseFrame(line, physicalLine);
                     if (frame == null) {
                         continue;
                     }
@@ -176,12 +248,13 @@ final class InternalLogParsers {
                             }
 
                             header = candidate;
+                            headerSourceLine = frame.sourceLine;
                             ins = header.get(1);
                             p3 = Integer.parseInt(header.get(4), 16);
                             commandData.clear();
 
                             if (p3 == 0) {
-                                apdusOut.add(joinNoSpaces(header));
+                                addApdu(apdusOut, events, joinNoSpaces(header), headerSourceLine);
                                 header = null;
                                 ins = null;
                                 state = State.WAIT_HEADER_TX;
@@ -194,14 +267,15 @@ final class InternalLogParsers {
                                 List<String> newHeader = headerFromFrame(frame.bytes);
                                 if (newHeader != null && frame.bytes.size() == 5) {
                                     if (header != null) {
-                                        apdusOut.add(joinNoSpaces(header));
+                                        addApdu(apdusOut, events, joinNoSpaces(header), headerSourceLine);
                                     }
                                     header = newHeader;
+                                    headerSourceLine = frame.sourceLine;
                                     ins = header.get(1);
                                     p3 = Integer.parseInt(header.get(4), 16);
                                     commandData.clear();
                                     if (p3 == 0) {
-                                        apdusOut.add(joinNoSpaces(header));
+                                        addApdu(apdusOut, events, joinNoSpaces(header), headerSourceLine);
                                         header = null;
                                         ins = null;
                                         state = State.WAIT_HEADER_TX;
@@ -218,7 +292,7 @@ final class InternalLogParsers {
                             if (isProcedureByteRequestingData(frame.bytes, ins)) {
                                 state = State.WAIT_COMMAND_DATA_TX;
                             } else {
-                                apdusOut.add(joinNoSpaces(header));
+                                addApdu(apdusOut, events, joinNoSpaces(header), headerSourceLine);
                                 header = null;
                                 ins = null;
                                 commandData.clear();
@@ -243,7 +317,7 @@ final class InternalLogParsers {
                             if (commandData.size() >= p3) {
                                 List<String> complete = new ArrayList<>(header);
                                 complete.addAll(commandData.subList(0, p3));
-                                apdusOut.add(joinNoSpaces(complete));
+                                addApdu(apdusOut, events, joinNoSpaces(complete), headerSourceLine);
                                 header = null;
                                 ins = null;
                                 commandData.clear();
@@ -255,13 +329,13 @@ final class InternalLogParsers {
             }
 
             if (header != null && state == State.WAIT_PROCEDURE_RX) {
-                apdusOut.add(joinNoSpaces(header));
+                addApdu(apdusOut, events, joinNoSpaces(header), headerSourceLine);
             }
 
-            return new ParseResult(apdusOut, List.of());
+            return new ParseResult(apdusOut, List.of(), events);
         }
 
-        private static Frame parseFrame(String line) {
+        private static Frame parseFrame(String line, int physicalLine) {
             if (line == null) {
                 return null;
             }
@@ -308,7 +382,7 @@ final class InternalLogParsers {
             } else {
                 bytes = extractHexBytes(payload);
             }
-            return new Frame(tx, bytes, extractSourceLineNumber(line));
+            return new Frame(tx, bytes, sourceLineOf(line, physicalLine));
         }
 
         private static List<String> extractHexBytes(String text) {
@@ -357,9 +431,16 @@ final class InternalLogParsers {
             return procedure == instruction || procedure == (instruction ^ 0xFF);
         }
 
-        private static String extractSourceLineNumber(String line) {
+        private static int sourceLineOf(String line, int fallback) {
             Matcher matcher = ORIGINAL_LINE_NUMBER.matcher(line == null ? "" : line);
-            return matcher.find() ? matcher.group(1) : "";
+            if (!matcher.find()) {
+                return fallback;
+            }
+            try {
+                return Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException ignored) {
+                return fallback;
+            }
         }
     }
 
@@ -378,6 +459,7 @@ final class InternalLogParsers {
         private static final class Frame {
             boolean isCommand;
             List<String> payload = List.of();
+            int sourceLine;
         }
 
         private OhBytesParser() {
@@ -404,7 +486,7 @@ final class InternalLogParsers {
             }
             String[] lines = sampleContent.split("\\R");
             for (String line : lines) {
-                Frame frame = parseFrame(line);
+                Frame frame = parseFrame(line, 0);
                 if (frame != null && !frame.payload.isEmpty()) {
                     return true;
                 }
@@ -416,6 +498,7 @@ final class InternalLogParsers {
         public ParseResult parse(Path inputFile) throws IOException {
             List<String> lines = Files.readAllLines(inputFile, StandardCharsets.UTF_8);
             List<String> apdusOut = new ArrayList<>();
+            List<ParsedLogEvent> events = new ArrayList<>();
             State state = State.WAIT_HEADER;
             List<String> header = new ArrayList<>(5);
             int expectedLc = 0;
@@ -423,11 +506,31 @@ final class InternalLogParsers {
             String ins = null;
             String p1 = null;
             int p3 = 0;
+            int headerSourceLine = 0;
+            String pendingAtr = "";
+            int pendingAtrLine = 0;
 
-            for (String line : lines) {
-                Frame frame = parseFrame(line);
-                if (frame == null || !frame.isCommand || frame.payload.isEmpty()) {
+            for (int lineIndex = 0; lineIndex < lines.size(); lineIndex++) {
+                Frame frame = parseFrame(lines.get(lineIndex), lineIndex + 1);
+                if (frame == null || frame.payload.isEmpty()) {
                     continue;
+                }
+                if (!frame.isCommand) {
+                    String candidate = joinNoSpaces(frame.payload);
+                    if (isValidAtr(candidate)) {
+                        pendingAtr = candidate;
+                        pendingAtrLine = frame.sourceLine;
+                    }
+                    continue;
+                }
+
+                if (!pendingAtr.isEmpty()) {
+                    if (startsWith(frame.payload, "80", "7C", "04", "00")) {
+                        events.add(new ParsedLogEvent.Reset(
+                                ParsedLogEvent.ResetType.COLD_RESET, pendingAtr, pendingAtrLine));
+                    }
+                    pendingAtr = "";
+                    pendingAtrLine = 0;
                 }
 
                 int i = 0;
@@ -443,13 +546,14 @@ final class InternalLogParsers {
 
                         header.clear();
                         header.addAll(frame.payload.subList(i, i + 5));
+                        headerSourceLine = frame.sourceLine;
                         ins = header.get(1);
                         p1 = header.get(2);
                         p3 = Integer.parseInt(header.get(4), 16);
                         i += 5;
 
                         if (p3 == 0 || isLeOnly(ins, p1, p3)) {
-                            apdusOut.add(joinNoSpaces(header));
+                            addApdu(apdusOut, events, joinNoSpaces(header), headerSourceLine);
                             header.clear();
                             data.clear();
                             continue;
@@ -468,7 +572,7 @@ final class InternalLogParsers {
                         if (data.size() >= expectedLc) {
                             List<String> full = new ArrayList<>(header);
                             full.addAll(data.subList(0, expectedLc));
-                            apdusOut.add(joinNoSpaces(full));
+                            addApdu(apdusOut, events, joinNoSpaces(full), headerSourceLine);
                             header.clear();
                             data.clear();
                             state = State.WAIT_HEADER;
@@ -492,7 +596,7 @@ final class InternalLogParsers {
                         if (data.size() >= expectedLc) {
                             List<String> full = new ArrayList<>(header);
                             full.addAll(data.subList(0, expectedLc));
-                            apdusOut.add(joinNoSpaces(full));
+                            addApdu(apdusOut, events, joinNoSpaces(full), headerSourceLine);
                             header.clear();
                             data.clear();
                             state = State.WAIT_HEADER;
@@ -500,7 +604,7 @@ final class InternalLogParsers {
                     }
                 }
             }
-            return new ParseResult(apdusOut, List.of());
+            return new ParseResult(apdusOut, List.of(), events);
         }
 
         private static boolean isLeOnly(String insHex, String p1Hex, int p3) {
@@ -519,7 +623,7 @@ final class InternalLogParsers {
             return idx >= 0 && idx + 5 <= payload.size() && COMMON_CLA.contains(payload.get(idx));
         }
 
-        private static Frame parseFrame(String line) {
+        private static Frame parseFrame(String line, int sourceLine) {
             List<String> tokens = extractHexTokens(line, HEX_RE);
             if (tokens.isEmpty()) {
                 return null;
@@ -532,6 +636,7 @@ final class InternalLogParsers {
 
             Frame frame = new Frame();
             frame.isCommand = "00".equals(tokens.get(ff + 4)) && "01".equals(tokens.get(ff + 5));
+            frame.sourceLine = sourceLine;
             int payloadStart = ff + 8;
             if (payloadStart >= tokens.size()) {
                 return null;
@@ -554,6 +659,21 @@ final class InternalLogParsers {
     private static final class UnisocUsimDrvParser extends BaseParser {
         private static final Pattern TX_LEN_PATTERN = Pattern.compile("tx_data_len\\[(\\d+)]");
         private static final Pattern BYTE_PATTERN = Pattern.compile("0x([0-9A-Fa-f]{2})");
+        private static final Pattern POWER_OFF_PATTERN = Pattern.compile(
+                "(?i)\\[[A-Z]]USIMDRV\\[(\\d+)]\\s*:\\s*"
+                        + "(?:SimPowerOff|SIM_PowerOff|SimColdResetStart)\\b.*"
+                        + "(?:complete|completed|done|success|start)"
+        );
+        private static final Pattern POWER_ON_PATTERN = Pattern.compile(
+                "(?i)\\[[A-Z]]USIMDRV\\[(\\d+)]\\s*:\\s*"
+                        + "(?:SimPowerOn|SIM_PowerOn|SimActivateVoltage)\\b.*"
+                        + "(?:complete|completed|done|success|start)"
+        );
+        private static final Pattern ATR_PATTERN = Pattern.compile(
+                "(?i)\\[[A-Z]]USIMDRV\\[(\\d+)]\\s*:\\s*"
+                        + "(?:SimGetATR|SIM_GetATR|SimValidateATR)\\b.*?"
+                        + "((?:0x)?3B(?:\\s+(?:0x)?[0-9A-F]{2}){7,})\\s*$"
+        );
 
         private UnisocUsimDrvParser() {
             super("usimdrv_unisoc", "Unisoc USIMDRV", ".txt", ".log");
@@ -567,15 +687,49 @@ final class InternalLogParsers {
         @Override
         public ParseResult parse(Path inputFile) throws IOException {
             List<String> apdus = new ArrayList<>();
+            List<ParsedLogEvent> events = new ArrayList<>();
             Integer txLen = null;
             List<String> buffer = new ArrayList<>();
+            int txSourceLine = 0;
+            Map<String, Integer> resetStageBySlot = new HashMap<>();
+            Map<String, Integer> resetSourceBySlot = new HashMap<>();
+            int sourceLine = 0;
 
             try (BufferedReader reader = Files.newBufferedReader(inputFile, StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = reader.readLine()) != null) {
+                    sourceLine++;
+                    Matcher powerOff = POWER_OFF_PATTERN.matcher(line);
+                    if (powerOff.find()) {
+                        resetStageBySlot.put(powerOff.group(1), 1);
+                        resetSourceBySlot.put(powerOff.group(1), sourceLine);
+                        continue;
+                    }
+                    Matcher powerOn = POWER_ON_PATTERN.matcher(line);
+                    if (powerOn.find() && resetStageBySlot.getOrDefault(powerOn.group(1), 0) == 1) {
+                        resetStageBySlot.put(powerOn.group(1), 2);
+                        continue;
+                    }
+                    Matcher atrMatcher = ATR_PATTERN.matcher(line);
+                    if (atrMatcher.find() && resetStageBySlot.getOrDefault(atrMatcher.group(1), 0) == 2) {
+                        String atr = atrMatcher.group(2).replace("0x", "").replace("0X", "")
+                                .replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+                        if (isValidAtr(atr)) {
+                            events.add(new ParsedLogEvent.Reset(
+                                    ParsedLogEvent.ResetType.COLD_RESET,
+                                    atr,
+                                    resetSourceBySlot.getOrDefault(atrMatcher.group(1), sourceLine)
+                            ));
+                        }
+                        resetStageBySlot.remove(atrMatcher.group(1));
+                        resetSourceBySlot.remove(atrMatcher.group(1));
+                        continue;
+                    }
+
                     Matcher txMatcher = TX_LEN_PATTERN.matcher(line);
                     if (txMatcher.find()) {
                         txLen = Integer.parseInt(txMatcher.group(1));
+                        txSourceLine = sourceLine;
                         buffer.clear();
                         continue;
                     }
@@ -586,19 +740,24 @@ final class InternalLogParsers {
                             buffer.add(byteMatcher.group(1).toUpperCase(Locale.ROOT));
                         }
                         if (buffer.size() >= txLen) {
-                            apdus.add(joinNoSpaces(buffer.subList(0, txLen)));
+                            addApdu(apdus, events, joinNoSpaces(buffer.subList(0, txLen)), txSourceLine);
                             txLen = null;
                             buffer.clear();
                         }
                     }
                 }
             }
-            return new ParseResult(apdus, List.of());
+            return new ParseResult(apdus, List.of(), events);
         }
     }
 
     private static final class PcscTerminalParser extends BaseParser {
         private static final Pattern PATTERN = Pattern.compile("-->\\s*\\[PCSC\\][\\\\/\\s]*([0-9A-Fa-f]+)");
+        private static final Pattern COLD_RESET_ATR_PATTERN = Pattern.compile(
+                "^\\s*(?:INFO\\s+\\S+\\s+)?"
+                        + "\\d{4}-\\d{2}-\\d{2}\\s+\\d{2}:\\d{2}:\\d{2}\\.\\d{3,6}\\s+<--\\s+"
+                        + "(3B(?:[0-9A-Fa-f]{2}){7,})\\s*$"
+        );
 
         private PcscTerminalParser() {
             super("pcsc_terminal", "PCSC Terminal", ".txt", ".log");
@@ -612,21 +771,45 @@ final class InternalLogParsers {
         @Override
         public ParseResult parse(Path inputFile) throws IOException {
             List<String> apdus = new ArrayList<>();
+            List<ParsedLogEvent> events = new ArrayList<>();
             try (BufferedReader reader = Files.newBufferedReader(inputFile, StandardCharsets.UTF_8)) {
                 String line;
+                int sourceLine = 0;
                 while ((line = reader.readLine()) != null) {
+                    sourceLine++;
+                    Matcher resetMatcher = COLD_RESET_ATR_PATTERN.matcher(line);
+                    if (resetMatcher.matches()) {
+                        events.add(new ParsedLogEvent.Reset(
+                                ParsedLogEvent.ResetType.COLD_RESET,
+                                resetMatcher.group(1).toUpperCase(Locale.ROOT),
+                                sourceLine
+                        ));
+                        continue;
+                    }
                     Matcher matcher = PATTERN.matcher(line);
                     if (matcher.find()) {
-                        apdus.add(matcher.group(1).toUpperCase(Locale.ROOT));
+                        String command = matcher.group(1).toUpperCase(Locale.ROOT);
+                        apdus.add(command);
+                        events.add(new ParsedLogEvent.Apdu(command, sourceLine));
                     }
                 }
             }
-            return new ParseResult(apdus, List.of());
+            return new ParseResult(apdus, List.of(), events);
         }
     }
 
     private static final class HtmlApduParser extends BaseParser {
-        private static final Pattern PATTERN = Pattern.compile("APDU:\\s*([0-9A-Fa-f\\s]+)");
+        private static final Pattern TABLE_PATTERN = Pattern.compile("(?is)<TABLE\\b.*?</TABLE>");
+        private static final Pattern TD_PATTERN = Pattern.compile("(?is)<TD\\b[^>]*>(.*?)</TD>");
+        private static final Pattern TAG_PATTERN = Pattern.compile("(?is)<[^>]+>");
+        private static final Pattern APDU_PATTERN = Pattern.compile(
+                "(?i)APDU:\\s*(Reset\\b|[0-9A-F]{2}(?:[0-9A-F\\s]*[0-9A-F])?)"
+        );
+        private static final Pattern ATR_PATTERN = Pattern.compile("(?i)ATR:\\s*(3B[0-9A-F]{14,})");
+        private static final Pattern FLAT_EVENT_PATTERN = Pattern.compile(
+                "(?i)APDU:\\s*(?:Reset\\b|[0-9A-F]{2}(?:[0-9A-F\\s]*[0-9A-F])?)"
+                        + "|ATR:\\s*3B[0-9A-F]{14,}"
+        );
 
         private HtmlApduParser() {
             super("html_apdu", "HTML APDU Report", ".html", ".htm");
@@ -642,16 +825,245 @@ final class InternalLogParsers {
         public ParseResult parse(Path inputFile) throws IOException {
             Charset charset = Charset.forName("GB2312");
             String html = Files.readString(inputFile, charset);
-            Matcher matcher = PATTERN.matcher(html);
             List<String> apdus = new ArrayList<>();
-            while (matcher.find()) {
-                String apdu = matcher.group(1).replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
-                if (!apdu.isBlank()) {
-                    apdus.add(apdu);
+            List<ParsedLogEvent> events = new ArrayList<>();
+            List<ApduStep> steps = new ArrayList<>();
+            int pendingResetOffset = -1;
+            int currentStep = -1;
+            boolean awaitingExpectedStatus = false;
+            int expectedStatusIndent = -1;
+
+            List<HtmlRecord> records = extractRecords(html);
+            boolean hasStructuredEvents = records.stream().anyMatch(record ->
+                    APDU_PATTERN.matcher(record.text()).find() || ATR_PATTERN.matcher(record.text()).find());
+            if (!hasStructuredEvents) {
+                records.clear();
+                Matcher flatEvents = FLAT_EVENT_PATTERN.matcher(html);
+                while (flatEvents.find()) {
+                    records.add(new HtmlRecord(flatEvents.start(), 0, flatEvents.group()));
                 }
             }
-            return new ParseResult(apdus, List.of());
+            for (HtmlRecord record : records) {
+                Matcher apduMatcher = APDU_PATTERN.matcher(record.text());
+                Matcher atrMatcher = ATR_PATTERN.matcher(record.text());
+                String apduOrReset = apduMatcher.find() ? apduMatcher.group(1) : null;
+                String atr = atrMatcher.find() ? atrMatcher.group(1) : null;
+                if (apduOrReset != null && apduOrReset.equalsIgnoreCase("Reset")) {
+                    pendingResetOffset = record.offset();
+                    currentStep = -1;
+                    awaitingExpectedStatus = false;
+                    continue;
+                }
+                if (atr != null && pendingResetOffset >= 0) {
+                    String normalizedAtr = atr.toUpperCase(Locale.ROOT);
+                    if (isValidAtr(normalizedAtr)) {
+                        events.add(new ParsedLogEvent.Reset(
+                                ParsedLogEvent.ResetType.COLD_RESET,
+                                normalizedAtr,
+                                lineNumberAt(html, pendingResetOffset)
+                        ));
+                    }
+                    pendingResetOffset = -1;
+                    continue;
+                }
+                if (apduOrReset != null) {
+                    pendingResetOffset = -1;
+                    String apdu = apduOrReset.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+                    if (!apdu.isBlank()) {
+                        apdus.add(apdu);
+                        int sourceLine = lineNumberAt(html, record.offset());
+                        events.add(new ParsedLogEvent.Apdu(apdu, sourceLine));
+                        steps.add(new ApduStep(apdu, List.of(), "", sourceLine));
+                        currentStep = steps.size() - 1;
+                        awaitingExpectedStatus = false;
+                    }
+                    continue;
+                }
+
+                if (currentStep < 0) {
+                    continue;
+                }
+                String text = record.text().trim();
+                if (text.startsWith("\u671F\u671B\u72B6\u6001\u503C:")) {
+                    String expression = text.substring(text.indexOf(':') + 1).trim();
+                    List<String> values = normalizeExpectedStatusValues(expression);
+                    if (!values.isEmpty()) {
+                        steps.set(currentStep, withExpectedStatus(steps.get(currentStep), values, expression));
+                    }
+                    continue;
+                }
+                if (text.startsWith("\u671F\u671B\u72B6\u6001\u5B57:")) {
+                    awaitingExpectedStatus = true;
+                    expectedStatusIndent = record.indent();
+                    continue;
+                }
+                if (awaitingExpectedStatus && text.startsWith("\u671F\u671B\u503C:") && record.indent() > expectedStatusIndent) {
+                    String expression = text.substring(text.indexOf(':') + 1).trim();
+                    List<String> values = normalizeExpectedStatusValues(expression);
+                    if (!values.isEmpty()) {
+                        steps.set(currentStep, withExpectedStatus(steps.get(currentStep), values, expression));
+                    }
+                    awaitingExpectedStatus = false;
+                    continue;
+                }
+                if (awaitingExpectedStatus && record.indent() <= expectedStatusIndent) {
+                    awaitingExpectedStatus = false;
+                }
+            }
+            return new ParseResult(apdus, List.of(), events, steps);
         }
+
+        private static List<HtmlRecord> extractRecords(String html) {
+            List<HtmlRecord> records = new ArrayList<>();
+            Matcher tables = TABLE_PATTERN.matcher(html);
+            while (tables.find()) {
+                Matcher cells = TD_PATTERN.matcher(tables.group());
+                int indent = 0;
+                String text = "";
+                boolean firstCell = true;
+                while (cells.find()) {
+                    String cell = cells.group(1);
+                    if (firstCell) {
+                        indent = countOccurrences(cell.toLowerCase(Locale.ROOT), "&nbsp;");
+                        firstCell = false;
+                    }
+                    String candidate = decodeHtmlText(cell);
+                    if (!candidate.isBlank()) {
+                        text = candidate;
+                    }
+                }
+                if (!text.isBlank()) {
+                    records.add(new HtmlRecord(tables.start(), indent, text));
+                }
+            }
+            return records;
+        }
+
+        private static String decodeHtmlText(String value) {
+            String text = TAG_PATTERN.matcher(value).replaceAll(" ");
+            text = text.replace("&nbsp;", " ")
+                    .replace("&NBSP;", " ")
+                    .replace("&amp;", "&")
+                    .replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .replace("&quot;", "\"");
+            return text.replaceAll("\\s+", " ").trim();
+        }
+
+        private static int countOccurrences(String value, String needle) {
+            int count = 0;
+            int offset = 0;
+            while ((offset = value.indexOf(needle, offset)) >= 0) {
+                count++;
+                offset += needle.length();
+            }
+            return count;
+        }
+
+        private static ApduStep withExpectedStatus(ApduStep step, List<String> values, String expression) {
+            return new ApduStep(
+                    step.command(),
+                    values,
+                    normalizeExpectedExpression(expression),
+                    step.sourceLine()
+            );
+        }
+
+        private static List<String> normalizeExpectedStatusValues(String expression) {
+            String normalized = normalizeExpectedExpression(expression);
+            if (normalized.isBlank() || normalized.equals("\u65E0") || normalized.equalsIgnoreCase("NONE")) {
+                return List.of();
+            }
+            String[] alternatives = normalized.split("[/|,，;；]");
+            List<String> values = new ArrayList<>();
+            for (String alternative : alternatives) {
+                String value = alternative.trim();
+                if (!value.matches("[0-9A-FX?]{4}")) {
+                    return List.of(normalized);
+                }
+                values.add(value);
+            }
+            return List.copyOf(values);
+        }
+
+        private static String normalizeExpectedExpression(String expression) {
+            return expression == null ? "" : expression.trim().toUpperCase(Locale.ROOT).replaceAll("\\s+", "");
+        }
+
+        private record HtmlRecord(int offset, int indent, String text) {
+        }
+    }
+
+    private static void addApdu(
+            List<String> apdus,
+            List<ParsedLogEvent> events,
+            String apdu,
+            int sourceLine
+    ) {
+        apdus.add(apdu);
+        events.add(new ParsedLogEvent.Apdu(apdu, sourceLine));
+    }
+
+    private static boolean startsWith(List<String> bytes, String... prefix) {
+        if (bytes == null || bytes.size() < prefix.length) {
+            return false;
+        }
+        for (int i = 0; i < prefix.length; i++) {
+            if (!prefix[i].equalsIgnoreCase(bytes.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int lineNumberAt(String text, int offset) {
+        int line = 1;
+        for (int i = 0; i < offset && i < text.length(); i++) {
+            if (text.charAt(i) == '\n') {
+                line++;
+            }
+        }
+        return line;
+    }
+
+    private static boolean isValidAtr(String value) {
+        String normalized = value == null ? "" : value.replaceAll("\\s+", "").toUpperCase(Locale.ROOT);
+        if (!normalized.matches("(?:3B|3F)[0-9A-F]{14,}") || (normalized.length() & 1) != 0) {
+            return false;
+        }
+        List<Integer> bytes = new ArrayList<>();
+        for (int i = 0; i < normalized.length(); i += 2) {
+            bytes.add(Integer.parseInt(normalized.substring(i, i + 2), 16));
+        }
+        if (bytes.size() < 2) {
+            return false;
+        }
+        int t0 = bytes.get(1);
+        int historicalLength = t0 & 0x0F;
+        int presence = (t0 >>> 4) & 0x0F;
+        int cursor = 2;
+        boolean nonZeroProtocol = false;
+        while (presence != 0) {
+            if ((presence & 0x1) != 0) cursor++;
+            if ((presence & 0x2) != 0) cursor++;
+            if ((presence & 0x4) != 0) cursor++;
+            if ((presence & 0x8) != 0) {
+                if (cursor >= bytes.size()) {
+                    return false;
+                }
+                int td = bytes.get(cursor++);
+                int protocol = td & 0x0F;
+                nonZeroProtocol |= protocol != 0 && protocol != 0x0F;
+                presence = (td >>> 4) & 0x0F;
+            } else {
+                presence = 0;
+            }
+            if (cursor > bytes.size()) {
+                return false;
+            }
+        }
+        int expectedLength = cursor + historicalLength + (nonZeroProtocol ? 1 : 0);
+        return expectedLength == bytes.size() || expectedLength + 1 == bytes.size();
     }
 
     private static List<String> extractHexTokens(String line, Pattern tokenPattern) {

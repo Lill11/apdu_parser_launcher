@@ -55,6 +55,12 @@ public final class BundledPluginSeedSelfTest {
         SelfTestSupport.assertTrue(!Files.exists(installed),
                 "A user-removed bundled plugin should not be reinstalled after the seed marker is written.");
 
+        Files.writeString(bundledPlugin.resolve("plugin.jar"), "updated jar", StandardCharsets.UTF_8);
+        PluginStateStore upgradedStore = new PluginStateStore(pluginsRoot, bundledRoot, "test-v2");
+        upgradedStore.ensureLayout();
+        SelfTestSupport.assertEquals("updated jar", Files.readString(installed.resolve("plugin.jar"), StandardCharsets.UTF_8),
+                "A new bundled plugin set must install the updated plugin over an older seed state.");
+
         System.out.println("BundledPluginSeedSelfTest passed.");
     }
 }

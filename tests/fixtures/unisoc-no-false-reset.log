@@ -1,0 +1,4 @@
+1 [W]USIMDRV[1]:SimSetClkStopMode, processing_cmd:0, power_off_mode[0], is in warm reset:0
+2 [T]USIMDRV[1]:SIM_SendInstrCode active sim card
+3 [T]USIMDRV[1]:tx_data_len[5]
+4 [T]USIMDRV[1]: 0x00 0xA4 0x04 0x00 0x00

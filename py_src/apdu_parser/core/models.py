@@ -40,6 +40,7 @@ class OutputFiles:
     errors_text: Path | None
     legacy_result_json: Path | None
     stderr_log: str = ""
+    java_text: Path | None = None
 
 
 @dataclass(slots=True)
@@ -51,7 +52,7 @@ class DetectedParser:
 
 @dataclass(slots=True)
 class ApduRow:
-    index: int
+    index: int | None
     command: str
     response: str
     command_name: str
@@ -62,9 +63,15 @@ class ApduRow:
     source_line: int
     filters: list[str] = field(default_factory=list)
     note: str = ""
+    event_sequence: int = 0
+    event_type: str = "APDU"
+    reset_type: str = ""
+    atr: str = ""
 
     @property
     def category(self) -> str:
+        if self.event_type == "RESET":
+            return "SYSTEM"
         if "ES10" in self.filters:
             return "ES10"
         if "FETCH/TR" in self.filters:
@@ -75,6 +82,8 @@ class ApduRow:
 
     @property
     def description(self) -> str:
+        if self.event_type == "RESET":
+            return "Cold Reset"
         return self.headline or self.command_name
 
 
@@ -88,6 +97,9 @@ class AnalysisEvent:
     status_word: str
     tag: str
     source_line: int
+    event_sequence: int = 0
+    reset_type: str = ""
+    atr: str = ""
 
 
 @dataclass(slots=True)
@@ -121,6 +133,14 @@ class ParserSummary:
 
 
 @dataclass(slots=True)
+class ApduStep:
+    command: str
+    expected_status_words: list[str] = field(default_factory=list)
+    expected_status_expression: str = ""
+    source_line: int = 0
+
+
+@dataclass(slots=True)
 class ParseResult:
     schema_version: int
     parser_version: str
@@ -133,12 +153,16 @@ class ParseResult:
     detected_parser: DetectedParser
     summary: ParserSummary
     apdus: list[ApduRow]
+    events: list[ApduRow]
     analysis: list[AnalysisEvent]
     applets: AppletPayload
     warnings: list[str]
     errors: list[ErrorPayload]
     output_files: OutputFiles
     raw: dict[str, Any]
+    apdu_steps: list[ApduStep] = field(default_factory=list)
+    generated_java: str = ""
+    generated_java_class_name: str = ""
 
 
 @dataclass(slots=True)

@@ -51,7 +51,7 @@ public class ApduWorkflowSelfTest {
 
         String analysis = Files.readString(imported.analysisOutputPath(), StandardCharsets.UTF_8);
         SelfTestSupport.assertTrue(analysis.contains("ES10 / EnableProfile"), "Analysis should highlight ES10 operation.");
-        SelfTestSupport.assertTrue(analysis.contains("#RESET LSE"), "Analysis should include reset markers.");
+        SelfTestSupport.assertTrue(!analysis.contains("#RESET"), "Honor reset text must not infer a physical Cold Reset.");
         SelfTestSupport.assertTrue(analysis.contains("Configure LSI"), "Analysis should include LSI operation.");
 
         String source = Files.readString(Path.of("src", "ApduParserEngine.java"), StandardCharsets.UTF_8);
